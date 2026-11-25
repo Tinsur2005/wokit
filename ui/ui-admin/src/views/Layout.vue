@@ -12,18 +12,21 @@ import {
   Memo,
   Menu,
   MoreFilled,
+  Setting,
   SwitchButton,
   Timer,
   User
 } from '@element-plus/icons-vue'
 import userApi from '@/api/user'
 import brandMark from '@/assets/brand-mark.png'
+import { useSystemConfigStore } from '@/store/systemConfig'
 import { useTokenStore } from '@/store/token'
 import { useUserInfoStore } from '@/store/userInfo'
 
 const router = useRouter()
 const tokenStore = useTokenStore()
 const userInfoStore = useUserInfoStore()
+const systemConfigStore = useSystemConfigStore()
 
 const drawerVisible = ref(false)
 const passwordDialog = ref(false)
@@ -31,25 +34,47 @@ const passwordFormRef = ref()
 const passwordForm = ref({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const savingPassword = ref(false)
 
+const iconMap = {
+  AlarmClock,
+  Calendar,
+  DocumentChecked,
+  FolderOpened,
+  HomeFilled,
+  Memo,
+  Setting,
+  Timer,
+  User
+}
+
+const workbenchRoot = computed(() =>
+  (userInfoStore.routerList || []).find((item) => item.type === 0 && item.path === '/')
+)
+
 const menus = computed(() => {
-  const list = [
-    { path: '/dashboard', name: '首页', icon: HomeFilled },
-    { path: '/tasks', name: '每日任务', icon: Calendar },
-    { path: '/weeklies', name: '周报记录', icon: DocumentChecked },
-    { path: '/memos', name: '备忘录', icon: Memo },
-    { path: '/worklogs', name: '工时登记', icon: Timer },
-    { path: '/timers', name: '计时', icon: AlarmClock },
-    { path: '/projects', name: '项目管理', icon: FolderOpened }
-  ]
-  if (userInfoStore.isAdmin) {
-    list.push({ path: '/users', name: '用户管理', icon: User })
-  }
-  return list
+  const children = workbenchRoot.value?.children || []
+  return children
+    .filter((item) => item.type === 1 && item.status === 1 && item.path)
+    .map((item) => ({
+      path: item.path,
+      name: item.name,
+      icon: iconMap[item.icon] || Menu
+    }))
 })
 
-const bottomMenus = computed(() =>
-  menus.value.filter((item) => item.path !== '/users' && item.path !== '/projects')
+const visibleMenus = computed(() =>
+  menus.value.filter((item) => userInfoStore.hasRoutePermission(item.path))
 )
+
+const bottomMenus = computed(() =>
+  visibleMenus.value.filter((item) => item.path !== '/projects')
+)
+
+const workbenchLabel = computed(() => workbenchRoot.value?.name || '工作台')
+
+const canEnterSettings = computed(
+  () => userInfoStore.isAdmin || userInfoStore.hasRoutePermission('/settings/general')
+)
+
 
 const avatarText = computed(() => {
   const name = userInfoStore.displayName
@@ -85,6 +110,10 @@ const loadUserInfo = async () => {
 }
 
 const handleCommand = async (command) => {
+  if (command === 'settings') {
+    router.push('/settings/general')
+    return
+  }
   if (command === 'password') {
     passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
     passwordDialog.value = true
@@ -139,15 +168,15 @@ onMounted(() => {
       <div class="brand">
         <img class="brand-mark" :src="brandMark" alt="" />
         <div class="brand-text">
-          <p class="brand-name">Wokit</p>
-          <p class="brand-sub">工作助手</p>
+          <p class="brand-name">{{ systemConfigStore.systemName }}</p>
+          <p class="brand-sub">{{ systemConfigStore.systemSubName }}</p>
         </div>
       </div>
 
       <nav class="nav">
-        <p class="nav-label">工作台</p>
+        <p class="nav-label">{{ workbenchLabel }}</p>
         <router-link
-          v-for="item in menus"
+          v-for="item in visibleMenus"
           :key="item.path"
           :to="item.path"
           class="nav-item"
@@ -171,6 +200,7 @@ onMounted(() => {
             </button>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item v-if="canEnterSettings" command="settings" :icon="Setting">系统设置</el-dropdown-item>
                 <el-dropdown-item command="password" :icon="Lock">修改密码</el-dropdown-item>
                 <el-dropdown-item command="logout" :icon="SwitchButton" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -187,7 +217,7 @@ onMounted(() => {
         </button>
         <div class="mobile-brand">
           <img class="brand-mark brand-mark--sm" :src="brandMark" alt="" />
-          <span>Wokit</span>
+          <span>{{ systemConfigStore.systemName }}</span>
         </div>
         <div class="user-avatar user-avatar--sm">{{ avatarText }}</div>
       </header>
@@ -215,14 +245,14 @@ onMounted(() => {
         <div class="brand brand--drawer">
           <img class="brand-mark" :src="brandMark" alt="" />
           <div class="brand-text">
-            <p class="brand-name">Wokit</p>
-            <p class="brand-sub">工作助手</p>
+            <p class="brand-name">{{ systemConfigStore.systemName }}</p>
+            <p class="brand-sub">{{ systemConfigStore.systemSubName }}</p>
           </div>
         </div>
         <nav class="nav">
-          <p class="nav-label">工作台</p>
+          <p class="nav-label">{{ workbenchLabel }}</p>
           <router-link
-            v-for="item in menus"
+            v-for="item in visibleMenus"
             :key="item.path"
             :to="item.path"
             class="nav-item"
@@ -242,6 +272,7 @@ onMounted(() => {
             </div>
           </div>
           <div class="drawer-actions">
+            <el-button v-if="canEnterSettings" plain size="small" :icon="Setting" @click="handleCommand('settings')">系统设置</el-button>
             <el-button plain size="small" :icon="Lock" @click="handleCommand('password')">修改密码</el-button>
             <el-button plain size="small" :icon="SwitchButton" @click="handleCommand('logout')">退出</el-button>
           </div>

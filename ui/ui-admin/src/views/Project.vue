@@ -5,6 +5,7 @@ import { Delete, Edit, FolderOpened, Plus, Search } from '@element-plus/icons-vu
 import projectApi from '@/api/project'
 import EmptyState from '@/components/EmptyState.vue'
 import { useProjectStore } from '@/store/project'
+import hasBtnPermission from '@/utils/btnPermission'
 
 const projectStore = useProjectStore()
 
@@ -109,6 +110,26 @@ const collectCategoryAndDescendants = (rootId) => {
   }
   return result
 }
+
+const categoryTreeData = computed(() => {
+  const nodeMap = new Map(
+    categoryTreeRows.value.map((category) => [
+      Number(category.id),
+      { ...category, children: [] }
+    ])
+  )
+  const roots = []
+  categoryTreeRows.value.forEach((category) => {
+    const node = nodeMap.get(Number(category.id))
+    const parentId = category.parentId == null ? null : Number(category.parentId)
+    if (parentId && nodeMap.has(parentId)) {
+      nodeMap.get(parentId).children.push(node)
+    } else {
+      roots.push(node)
+    }
+  })
+  return roots
+})
 
 const editingCategoryDescendantIds = computed(() => {
   if (!editingCategoryId.value) return new Set()
@@ -290,7 +311,7 @@ onMounted(load)
         <p class="wk-page-desc">先按分类整理项目，再把任务、周报和工时归到具体项目上。</p>
       </div>
       <div class="wk-page-actions">
-        <el-button type="primary" :icon="Plus" @click="openProjectCreate">新建项目</el-button>
+        <el-button v-if="hasBtnPermission('project:add')" type="primary" :icon="Plus" @click="openProjectCreate">新建项目</el-button>
       </div>
     </div>
 
@@ -301,28 +322,33 @@ onMounted(load)
             <h2 class="panel-title">项目分类</h2>
             <p class="panel-sub">{{ categories.length }} 个分类</p>
           </div>
-          <el-button link type="primary" :icon="Plus" @click="openCategoryCreate">新建</el-button>
+          <el-button v-if="hasBtnPermission('project:category:add')" link type="primary" :icon="Plus" @click="openCategoryCreate">新建</el-button>
         </div>
 
         <div v-loading="loading" class="category-list">
-          <div
-            v-for="category in categoryTreeRows"
-            :key="category.id"
-            class="category-row"
-            :style="{ paddingLeft: `${10 + category.level * 16}px` }"
-            :title="category.path"
+          <el-tree
+            v-if="categories.length"
+            :data="categoryTreeData"
+            node-key="id"
+            :props="{ label: 'name', children: 'children' }"
+            default-expand-all
+            :expand-on-click-node="false"
+            :indent="16"
+            class="category-tree"
           >
-            <span v-if="category.level" class="category-tree-line"></span>
-            <span class="category-badge">{{ category.name.slice(0, 1) }}</span>
-            <div class="category-info">
-              <p class="category-name">{{ category.name }}</p>
-              <p class="category-count">{{ category.totalProjectCount }} 个项目</p>
-            </div>
-            <div class="category-actions">
-              <el-button link type="primary" :icon="Edit" aria-label="编辑分类" @click="openCategoryEdit(category)" />
-              <el-button link type="danger" :icon="Delete" aria-label="删除分类" @click="removeCategory(category)" />
-            </div>
-          </div>
+            <template #default="{ data }">
+              <div class="category-node" :title="data.path">
+                <div class="category-info">
+                  <p class="category-name">{{ data.name }}</p>
+                  <p class="category-count">{{ data.totalProjectCount }} 个项目</p>
+                </div>
+                <div v-if="hasBtnPermission('project:category:edit') || hasBtnPermission('project:category:delete')" class="category-actions" @click.stop>
+                  <el-button v-if="hasBtnPermission('project:category:edit')" link type="primary" :icon="Edit" aria-label="编辑分类" @click="openCategoryEdit(data)" />
+                  <el-button v-if="hasBtnPermission('project:category:delete')" link type="danger" :icon="Delete" aria-label="删除分类" @click="removeCategory(data)" />
+                </div>
+              </div>
+            </template>
+          </el-tree>
 
           <EmptyState
             v-if="!categories.length && !loading"
@@ -383,11 +409,11 @@ onMounted(load)
               <span class="project-date">{{ formatDate(row.createTime) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column v-if="hasBtnPermission('project:edit') || hasBtnPermission('project:delete')" label="操作" width="150" fixed="right">
             <template #default="{ row }">
               <div class="table-actions">
-                <el-button link type="primary" :icon="Edit" @click="openProjectEdit(row)">编辑</el-button>
-                <el-button link type="danger" :icon="Delete" @click="removeProject(row)">删除</el-button>
+                <el-button v-if="hasBtnPermission('project:edit')" link type="primary" :icon="Edit" @click="openProjectEdit(row)">编辑</el-button>
+                <el-button v-if="hasBtnPermission('project:delete')" link type="danger" :icon="Delete" @click="removeProject(row)">删除</el-button>
               </div>
             </template>
           </el-table-column>
@@ -412,9 +438,9 @@ onMounted(load)
             </div>
             <div class="project-mobile-foot">
               <span class="project-date">创建于 {{ formatDate(project.createTime) }}</span>
-              <div class="table-actions">
-                <el-button link type="primary" :icon="Edit" aria-label="编辑项目" @click="openProjectEdit(project)" />
-                <el-button link type="danger" :icon="Delete" aria-label="删除项目" @click="removeProject(project)" />
+              <div v-if="hasBtnPermission('project:edit') || hasBtnPermission('project:delete')" class="table-actions">
+                <el-button v-if="hasBtnPermission('project:edit')" link type="primary" :icon="Edit" aria-label="编辑项目" @click="openProjectEdit(project)" />
+                <el-button v-if="hasBtnPermission('project:delete')" link type="danger" :icon="Delete" aria-label="删除项目" @click="removeProject(project)" />
               </div>
             </div>
           </article>
@@ -564,38 +590,37 @@ onMounted(load)
   padding: 0 8px 10px;
 }
 
-.category-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 10px;
-  transition: background-color 0.15s ease;
+.category-tree {
+  background: transparent;
 }
 
-.category-row:hover {
+.category-tree :deep(.el-tree-node__content) {
+  height: auto;
+  min-height: 44px;
+  padding: 3px 6px;
+  border-radius: 9px;
+}
+
+.category-tree :deep(.el-tree-node__content:hover) {
   background: #f8faf9;
 }
 
-.category-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  color: #0b8b4f;
-  font-size: 13px;
-  font-weight: 600;
-  background: #e9f8f1;
-  border-radius: 8px;
+.category-tree :deep(.el-tree-node__expand-icon) {
+  color: #98a2b3;
+  font-size: 12px;
 }
 
-.category-tree-line {
-  width: 11px;
-  height: 1px;
-  flex-shrink: 0;
-  background: #cfdad5;
+.category-tree :deep(.el-tree-node__expand-icon.is-leaf) {
+  color: transparent;
+}
+
+.category-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 2px;
 }
 
 .category-info {
@@ -604,9 +629,13 @@ onMounted(load)
 }
 
 .category-name {
+  overflow: hidden;
   color: var(--wk-text);
   font-size: 13px;
   font-weight: 500;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .category-count {
@@ -620,6 +649,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .category-actions :deep(.el-button),
@@ -736,8 +766,6 @@ onMounted(load)
   }
 
   .category-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     min-height: 80px;
   }
 }

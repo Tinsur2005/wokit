@@ -62,8 +62,15 @@ public class User implements Serializable {
 
     /**
      * 角色（0：普通用户，1：管理员）
+     * 保留该字段供登录 Token 与接口鉴权使用，新增用户时按所选角色自动同步
      */
     private Integer role;
+
+    /**
+     * 角色ID，仅用于前后端传递，不落库
+     */
+    @TableField(exist = false)
+    private Long roleId;
 
     /**
      * 状态（0：停用，1：正常）

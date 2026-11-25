@@ -7,6 +7,7 @@ import ProjectPicker from '@/components/ProjectPicker.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useProjectStore } from '@/store/project'
+import hasBtnPermission from '@/utils/btnPermission'
 
 const todayStr = (() => {
   const now = new Date()
@@ -217,7 +218,7 @@ onMounted(() => {
           :clearable="false"
           @change="handleMonthChange"
         />
-        <el-button type="primary" :icon="Plus" @click="openCreate">登记工时</el-button>
+        <el-button v-if="hasBtnPermission('worklog:add')" type="primary" :icon="Plus" @click="openCreate">登记工时</el-button>
       </div>
     </div>
 
@@ -239,7 +240,7 @@ onMounted(() => {
             @keyup.enter="handleSearch"
             @clear="handleSearch"
           />
-          <el-button @click="handleSearch">搜索</el-button>
+          <el-button v-if="hasBtnPermission('worklog:search')" @click="handleSearch">搜索</el-button>
           <el-button @click="loadAll">刷新</el-button>
         </div>
         <p class="list-count">当前月共 {{ total }} 条记录</p>
@@ -274,11 +275,11 @@ onMounted(() => {
             <span class="hours-text">{{ formatHours(row.hours) }}<em>h</em></span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column v-if="hasBtnPermission('worklog:edit') || hasBtnPermission('worklog:delete')" label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
-              <el-button link type="primary" :icon="Edit" @click="openEdit(row)">编辑</el-button>
-              <el-button link type="danger" :icon="Delete" @click="removeRow(row)">删除</el-button>
+              <el-button v-if="hasBtnPermission('worklog:edit')" link type="primary" :icon="Edit" @click="openEdit(row)">编辑</el-button>
+              <el-button v-if="hasBtnPermission('worklog:delete')" link type="danger" :icon="Delete" @click="removeRow(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -293,9 +294,9 @@ onMounted(() => {
           <div class="log-card-head">
             <span class="log-card-date">{{ row.workDate }}</span>
             <span class="hours-text">{{ formatHours(row.hours) }}<em>h</em></span>
-            <div class="table-actions">
-              <el-button link type="primary" :icon="Edit" aria-label="编辑" @click="openEdit(row)" />
-              <el-button link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
+            <div v-if="hasBtnPermission('worklog:edit') || hasBtnPermission('worklog:delete')" class="table-actions">
+              <el-button v-if="hasBtnPermission('worklog:edit')" link type="primary" :icon="Edit" aria-label="编辑" @click="openEdit(row)" />
+              <el-button v-if="hasBtnPermission('worklog:delete')" link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
             </div>
           </div>
           <div v-if="projectStore.projectName(row.projectId)" class="log-card-project">

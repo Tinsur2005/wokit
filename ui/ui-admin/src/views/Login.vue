@@ -7,11 +7,13 @@ import brandLockup from '@/assets/brand-lockup.png'
 import userApi from '@/api/user'
 import { useTokenStore } from '@/store/token'
 import { useUserInfoStore } from '@/store/userInfo'
+import { useSystemConfigStore } from '@/store/systemConfig'
 
 const route = useRoute()
 const router = useRouter()
 const tokenStore = useTokenStore()
 const userInfoStore = useUserInfoStore()
+const systemConfigStore = useSystemConfigStore()
 
 const formRef = ref()
 const loading = ref(false)
@@ -75,7 +77,7 @@ const submit = async () => {
         </div>
         <div class="form-head">
           <h2>欢迎回来</h2>
-          <p class="form-sub">使用平台账号进入工作台</p>
+          <p class="form-sub">{{ systemConfigStore.loginHint }}</p>
         </div>
 
         <div class="form-wrap" @keyup.enter="submit">

@@ -45,4 +45,19 @@ public interface IUserService extends IService<User> {
      * 查询当前登录用户信息（密码置空）
      */
     User currentUser(Long id);
+
+    /**
+     * 按ID查询用户详情，带角色信息
+     */
+    UserVO detail(Long id);
+
+    /**
+     * 当前用户信息 + 路由权限树 + 按钮权限列表
+     */
+    java.util.Map<String, Object> userInfo(Long id);
+
+    /**
+     * 删除用户，同时清理用户角色关联
+     */
+    void deleteUser(Long id);
 }

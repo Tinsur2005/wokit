@@ -18,6 +18,7 @@ import ProjectPicker from '@/components/ProjectPicker.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useProjectStore } from '@/store/project'
+import hasBtnPermission from '@/utils/btnPermission'
 
 const pad = (num) => String(num).padStart(2, '0')
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
@@ -300,7 +301,7 @@ onMounted(() => {
         <p class="wk-page-desc">按日期安排任务，用截止时间收口，把今天的事做完。</p>
       </div>
       <div class="wk-page-actions">
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建任务</el-button>
+        <el-button v-if="hasBtnPermission('task:add')" type="primary" :icon="Plus" @click="openCreate">新建任务</el-button>
       </div>
     </div>
 
@@ -400,7 +401,7 @@ onMounted(() => {
             </div>
             <p class="day-sub">当日截止任务 · 共 {{ tasks.length }} 项</p>
           </div>
-          <el-tooltip content="添加当日任务" placement="top">
+          <el-tooltip v-if="hasBtnPermission('task:add')" content="添加当日任务" placement="top">
             <button class="day-add" type="button" aria-label="添加任务" @click="openCreate">
               <el-icon :size="18"><Plus /></el-icon>
             </button>
@@ -420,6 +421,7 @@ onMounted(() => {
                 :class="{ checked: task.status === 1 }"
                 type="button"
                 :aria-label="task.status === 1 ? '标记为待完成' : '标记为已完成'"
+                :disabled="!hasBtnPermission('task:toggle')"
                 @click="toggleTask(task)"
               >
                 <el-icon v-if="task.status === 1" :size="13"><Check /></el-icon>
@@ -444,13 +446,13 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="task-ops">
-                <el-tooltip content="编辑" placement="top">
+              <div v-if="hasBtnPermission('task:edit') || hasBtnPermission('task:delete')" class="task-ops">
+                <el-tooltip v-if="hasBtnPermission('task:edit')" content="编辑" placement="top">
                   <button class="row-btn" type="button" @click="openEdit(task)">
                     <el-icon :size="15"><Edit /></el-icon>
                   </button>
                 </el-tooltip>
-                <el-tooltip content="删除" placement="top">
+                <el-tooltip v-if="hasBtnPermission('task:delete')" content="删除" placement="top">
                   <button class="row-btn is-danger" type="button" @click="removeTask(task)">
                     <el-icon :size="15"><Delete /></el-icon>
                   </button>

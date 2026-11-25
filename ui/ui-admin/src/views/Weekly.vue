@@ -17,6 +17,7 @@ import ProjectPicker from '@/components/ProjectPicker.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useProjectStore } from '@/store/project'
+import hasBtnPermission from '@/utils/btnPermission'
 
 const pad = (num) => String(num).padStart(2, '0')
 const toDateStr = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
@@ -268,7 +269,7 @@ onMounted(() => {
           </button>
           <el-button text class="week-today" @click="goCurrentWeek">本周</el-button>
         </div>
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建记录</el-button>
+        <el-button v-if="hasBtnPermission('weekly:add')" type="primary" :icon="Plus" @click="openCreate">新建记录</el-button>
       </div>
     </div>
 
@@ -285,7 +286,7 @@ onMounted(() => {
           <p class="wk-panel-sub">{{ weekLabel }} · 共 {{ rows.length }} 条记录</p>
         </div>
         <div class="table-actions">
-          <el-button :icon="Download" @click="exportWeek">导出本周</el-button>
+          <el-button v-if="hasBtnPermission('weekly:export')" :icon="Download" @click="exportWeek">导出本周</el-button>
         </div>
       </div>
 
@@ -334,11 +335,11 @@ onMounted(() => {
             <span v-else class="wk-muted">未填写</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="124" fixed="right">
+        <el-table-column v-if="hasBtnPermission('weekly:edit') || hasBtnPermission('weekly:delete')" label="操作" width="124" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
-              <el-button link type="primary" :icon="Edit" @click="openEdit(row)">编辑</el-button>
-              <el-button link type="danger" :icon="Delete" @click="removeRow(row)">删除</el-button>
+              <el-button v-if="hasBtnPermission('weekly:edit')" link type="primary" :icon="Edit" @click="openEdit(row)">编辑</el-button>
+              <el-button v-if="hasBtnPermission('weekly:delete')" link type="danger" :icon="Delete" @click="removeRow(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -352,9 +353,9 @@ onMounted(() => {
         <article v-for="row in rows" :key="row.id" class="weekly-card">
           <div class="weekly-card-head">
             <h3 class="weekly-task">{{ row.taskContent }}</h3>
-            <div class="table-actions">
-              <el-button link type="primary" :icon="Edit" aria-label="编辑" @click="openEdit(row)" />
-              <el-button link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
+            <div v-if="hasBtnPermission('weekly:edit') || hasBtnPermission('weekly:delete')" class="table-actions">
+              <el-button v-if="hasBtnPermission('weekly:edit')" link type="primary" :icon="Edit" aria-label="编辑" @click="openEdit(row)" />
+              <el-button v-if="hasBtnPermission('weekly:delete')" link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
             </div>
           </div>
           <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag weekly-project-mobile">

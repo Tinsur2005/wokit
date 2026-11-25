@@ -55,8 +55,7 @@ public class UserController {
      */
     @GetMapping("/userInfo")
     public Result userInfo(HttpServletRequest request) {
-        User user = userService.currentUser(AuthUtil.getUserId(request));
-        return Result.ok(user);
+        return Result.ok(userService.userInfo(AuthUtil.getUserId(request)));
     }
 
     /**
@@ -76,15 +75,7 @@ public class UserController {
     @GetMapping("/{id}")
     public Result<UserVO> getById(@PathVariable Long id, HttpServletRequest request) {
         checkAdmin(request);
-        User user = userService.getById(id);
-        if (user == null) {
-            throw new ServiceException("用户不存在或已被删除");
-        }
-        user.setPassword(null);
-        UserVO vo = new UserVO();
-        org.springframework.beans.BeanUtils.copyProperties(user, vo);
-        vo.setRoleName(user.getRole() != null && user.getRole() == 1 ? "管理员" : "普通用户");
-        return Result.ok(vo);
+        return Result.ok(userService.detail(id));
     }
 
     /**
@@ -104,7 +95,7 @@ public class UserController {
     @PutMapping("/{id}")
     public Result update(@PathVariable Long id, @RequestBody User user, HttpServletRequest request) {
         checkAdmin(request);
-        // 角色和状态走各自接口，这里不覆盖
+        // 角色通过 roleId 传入，在 service 中同步到用户角色关联表
         user.setRole(null);
         user.setStatus(null);
         return userService.updateUser(id, user);
@@ -136,7 +127,7 @@ public class UserController {
         if (id.equals(AuthUtil.getUserId(request))) {
             throw new ServiceException("不能删除当前登录账号");
         }
-        userService.removeById(id);
+        userService.deleteUser(id);
         return Result.ok("删除成功");
     }
 

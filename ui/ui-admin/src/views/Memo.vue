@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus, Search, Star, StarFilled } from '@element-plus/icons-vue'
 import memoApi from '@/api/memo'
 import EmptyState from '@/components/EmptyState.vue'
+import hasBtnPermission from '@/utils/btnPermission'
 
 const memos = ref([])
 const keyword = ref('')
@@ -120,7 +121,7 @@ onMounted(loadMemos)
         <p class="wk-page-desc">随手记下想法、待确认事项和临时信息，置顶重要内容。</p>
       </div>
       <div class="wk-page-actions">
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建备忘</el-button>
+        <el-button v-if="hasBtnPermission('memo:add')" type="primary" :icon="Plus" @click="openCreate">新建备忘</el-button>
       </div>
     </div>
 
@@ -153,7 +154,7 @@ onMounted(loadMemos)
               <span class="memo-color"></span>
               <span v-if="memo.pinned === 1" class="memo-pin-tag">置顶</span>
               <div class="memo-actions">
-                <el-tooltip :content="memo.pinned === 1 ? '取消置顶' : '置顶'" placement="top">
+                <el-tooltip v-if="hasBtnPermission('memo:pin')" :content="memo.pinned === 1 ? '取消置顶' : '置顶'" placement="top">
                   <button class="memo-btn" type="button" @click="togglePin(memo)">
                     <el-icon :size="15">
                       <StarFilled v-if="memo.pinned === 1" />
@@ -161,12 +162,12 @@ onMounted(loadMemos)
                     </el-icon>
                   </button>
                 </el-tooltip>
-                <el-tooltip content="编辑" placement="top">
+                <el-tooltip v-if="hasBtnPermission('memo:edit')" content="编辑" placement="top">
                   <button class="memo-btn" type="button" @click="openEdit(memo)">
                     <el-icon :size="15"><Edit /></el-icon>
                   </button>
                 </el-tooltip>
-                <el-tooltip content="删除" placement="top">
+                <el-tooltip v-if="hasBtnPermission('memo:delete')" content="删除" placement="top">
                   <button class="memo-btn is-danger" type="button" @click="removeMemo(memo)">
                     <el-icon :size="15"><Delete /></el-icon>
                   </button>

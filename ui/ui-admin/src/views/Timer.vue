@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { AlarmClock, Delete, Edit, Plus } from '@element-plus/icons-vue'
 import EmptyState from '@/components/EmptyState.vue'
 import timerApi from '@/api/timer'
+import hasBtnPermission from '@/utils/btnPermission'
 
 const MODE_META = {
   countdown_day: { label: '倒数日', caption: '距离目标日' },
@@ -299,7 +300,7 @@ onBeforeUnmount(() => {
         <p class="wk-page-desc">倒数日、正数日与精准倒计时，盯住每一个重要节点。</p>
       </div>
       <div class="wk-page-actions">
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建计时</el-button>
+        <el-button v-if="hasBtnPermission('timer:add')" type="primary" :icon="Plus" @click="openCreate">新建计时</el-button>
       </div>
     </div>
 
@@ -325,11 +326,11 @@ onBeforeUnmount(() => {
           >
             <div class="cd-top">
               <span class="mode-tag">{{ modeLabel(item) }}</span>
-              <div class="cd-actions">
-                <button class="cd-icon-btn" type="button" aria-label="编辑" @click="openEdit(item)">
+              <div v-if="hasBtnPermission('timer:edit') || hasBtnPermission('timer:delete')" class="cd-actions">
+                <button v-if="hasBtnPermission('timer:edit')" class="cd-icon-btn" type="button" aria-label="编辑" @click="openEdit(item)">
                   <el-icon :size="14"><Edit /></el-icon>
                 </button>
-                <button class="cd-icon-btn is-danger" type="button" aria-label="删除" @click="removeItem(item)">
+                <button v-if="hasBtnPermission('timer:delete')" class="cd-icon-btn is-danger" type="button" aria-label="删除" @click="removeItem(item)">
                   <el-icon :size="14"><Delete /></el-icon>
                 </button>
               </div>
