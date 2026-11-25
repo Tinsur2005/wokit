@@ -1,12 +1,15 @@
 package cn.tinsur.wokit.service.impl;
 
 import cn.tinsur.wokit.exception.ServiceException;
+import cn.tinsur.wokit.mapper.ProjectMapper;
 import cn.tinsur.wokit.mapper.WeeklyMapper;
+import cn.tinsur.wokit.pojo.entity.Project;
 import cn.tinsur.wokit.pojo.entity.Weekly;
 import cn.tinsur.wokit.service.IWeeklyService;
 import cn.tinsur.wokit.util.Result;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
@@ -26,6 +29,9 @@ import java.util.List;
  */
 @Service
 public class WeeklyServiceImpl extends ServiceImpl<WeeklyMapper, Weekly> implements IWeeklyService {
+
+    @Autowired
+    private ProjectMapper projectMapper;
 
     /**
      * 查询某一周的周报明细（按录入顺序）
@@ -47,6 +53,7 @@ public class WeeklyServiceImpl extends ServiceImpl<WeeklyMapper, Weekly> impleme
     @Override
     public Result add(Weekly weekly, Long userId) {
         validateWeekly(weekly);
+        validateProject(weekly.getProjectId(), userId);
         LocalDate monday = normalizeWeek(weekly.getWeekStart());
         weekly.setId(null);
         weekly.setUserId(userId);
@@ -63,6 +70,7 @@ public class WeeklyServiceImpl extends ServiceImpl<WeeklyMapper, Weekly> impleme
     public Result update(Long id, Weekly weekly, Long userId) {
         Weekly dbWeekly = getOwnWeekly(id, userId);
         validateWeekly(weekly);
+        validateProject(weekly.getProjectId(), userId);
         LocalDate monday = weekly.getWeekStart() == null
                 ? toLocalDate(dbWeekly.getWeekStart())
                 : normalizeWeek(weekly.getWeekStart());
@@ -82,6 +90,19 @@ public class WeeklyServiceImpl extends ServiceImpl<WeeklyMapper, Weekly> impleme
         getOwnWeekly(id, userId);
         removeById(id);
         return Result.ok("周报记录已删除");
+    }
+
+    /**
+     * 校验绑定项目归属
+     */
+    private void validateProject(Long projectId, Long userId) {
+        if (projectId == null) {
+            return;
+        }
+        Project project = projectMapper.selectById(projectId);
+        if (project == null || !project.getUserId().equals(userId)) {
+            throw new ServiceException("绑定项目不存在或无权使用");
+        }
     }
 
     /**

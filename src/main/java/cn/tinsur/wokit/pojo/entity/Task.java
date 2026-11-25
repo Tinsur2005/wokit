@@ -65,6 +65,12 @@ public class Task implements Serializable {
     private Integer status;
 
     /**
+     * 绑定项目ID
+     */
+    @TableField("project_id")
+    private Long projectId;
+
+    /**
      * 创建时间
      */
     @TableField(value = "create_time", fill = FieldFill.INSERT)

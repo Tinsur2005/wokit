@@ -3,8 +3,10 @@ import { nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Coin, Delete, Edit, Plus, Search, TrendCharts } from '@element-plus/icons-vue'
 import workLogApi from '@/api/worklog'
+import ProjectPicker from '@/components/ProjectPicker.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import { useProjectStore } from '@/store/project'
 
 const todayStr = (() => {
   const now = new Date()
@@ -24,19 +26,43 @@ const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const editingId = ref(null)
 const formRef = ref()
+const projectPickerRef = ref()
+const projectBound = ref(false)
 const submitting = ref(false)
 const form = ref({
   workDate: todayStr,
   project: '',
   content: '',
-  hours: 8
+  hours: 8,
+  projectId: null
 })
+
+const projectStore = useProjectStore()
+
+const workLogName = (row) => projectStore.projectName(row.projectId) || row.project || '未命名事项'
 
 const rules = {
   workDate: [{ required: true, message: '请选择工作日期', trigger: 'change' }],
   project: [
-    { required: true, message: '请填写项目或事项名称', trigger: 'blur' },
-    { max: 100, message: '不能超过 100 个字', trigger: 'blur' }
+    {
+      validator: (rule, value, callback) => {
+        if (projectBound.value) {
+          callback()
+          return
+        }
+        const name = String(value || '').trim()
+        if (!name) {
+          callback(new Error('请填写事项名称'))
+          return
+        }
+        if (name.length > 100) {
+          callback(new Error('不能超过 100 个字'))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur'
+    }
   ],
   content: [{ max: 500, message: '工作内容不能超过 500 个字', trigger: 'blur' }],
   hours: [
@@ -99,7 +125,8 @@ const handleSearch = () => {
 const openCreate = () => {
   dialogMode.value = 'create'
   editingId.value = null
-  form.value = { workDate: todayStr, project: '', content: '', hours: 8 }
+  projectBound.value = false
+  form.value = { workDate: todayStr, project: '', content: '', hours: 8, projectId: null }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
 }
@@ -107,11 +134,13 @@ const openCreate = () => {
 const openEdit = (row) => {
   dialogMode.value = 'edit'
   editingId.value = row.id
+  projectBound.value = Boolean(row.projectId)
   form.value = {
     workDate: row.workDate,
     project: row.project,
     content: row.content || '',
-    hours: Number(row.hours)
+    hours: Number(row.hours),
+    projectId: row.projectId || null
   }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
@@ -119,12 +148,18 @@ const openEdit = (row) => {
 
 const submitForm = async () => {
   if (!formRef.value || submitting.value) return
+  if (!projectPickerRef.value?.validate()) return
   await formRef.value.validate()
   submitting.value = true
   try {
+    const selectedProjectName = projectStore.projectName(form.value.projectId)
+    const payload = {
+      ...form.value,
+      project: projectBound.value ? selectedProjectName : form.value.project
+    }
     const result = editingId.value
-      ? await workLogApi.update(editingId.value, form.value)
-      : await workLogApi.add(form.value)
+      ? await workLogApi.update(editingId.value, payload)
+      : await workLogApi.add(payload)
     if (result.code === 1) {
       ElMessage.success(result.msg)
       dialogVisible.value = false
@@ -141,7 +176,7 @@ const submitForm = async () => {
 
 const removeRow = async (row) => {
   await ElMessageBox.confirm(
-    `确定删除 ${row.workDate} 的「${row.project}」工时记录吗？`,
+    `确定删除 ${row.workDate} 的「${workLogName(row)}」工时记录吗？`,
     '删除工时',
     { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
   )
@@ -159,7 +194,10 @@ const removeRow = async (row) => {
 
 const formatHours = (hours) => Number(hours || 0).toFixed(1)
 
-onMounted(loadAll)
+onMounted(() => {
+  projectStore.load()
+  loadAll()
+})
 </script>
 
 <template>
@@ -196,7 +234,7 @@ onMounted(loadAll)
             v-model="keyword"
             class="search-input"
             clearable
-            placeholder="搜索项目或工作内容"
+            placeholder="搜索事项或工作内容"
             :prefix-icon="Search"
             @keyup.enter="handleSearch"
             @clear="handleSearch"
@@ -213,7 +251,19 @@ onMounted(loadAll)
             <span class="date-text">{{ row.workDate }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="project" label="项目 / 事项" min-width="160" />
+        <el-table-column label="事项" min-width="160">
+          <template #default="{ row }">
+            <div v-if="projectStore.projectName(row.projectId)" class="worklog-item-cell">
+              <span class="worklog-item-name">{{ projectStore.projectName(row.projectId) }}</span>
+              <span class="worklog-project-category">
+                {{ projectStore.projectCategoryName(row.projectId) || '未分类' }}
+              </span>
+            </div>
+            <div v-else class="worklog-item-cell">
+              <span class="worklog-item-name">{{ row.project }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="工作内容" min-width="240">
           <template #default="{ row }">
             <span :class="row.content ? 'content-text' : 'wk-muted'">{{ row.content || '未填写' }}</span>
@@ -248,7 +298,13 @@ onMounted(loadAll)
               <el-button link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
             </div>
           </div>
-          <p class="log-card-project">{{ row.project }}</p>
+          <div v-if="projectStore.projectName(row.projectId)" class="log-card-project">
+            <p class="log-card-project-name">{{ projectStore.projectName(row.projectId) }}</p>
+            <span class="log-card-category">
+              {{ projectStore.projectCategoryName(row.projectId) || '未分类' }}
+            </span>
+          </div>
+          <p v-else class="log-card-project">{{ row.project }}</p>
           <p v-if="row.content" class="log-card-content">{{ row.content }}</p>
           <p v-else class="wk-muted log-card-content">未填写工作内容</p>
         </article>
@@ -299,8 +355,14 @@ onMounted(loadAll)
           </el-form-item>
         </div>
 
-        <el-form-item label="项目 / 事项" prop="project">
-          <el-input v-model="form.project" maxlength="100" placeholder="例如：Wokit 工作助手" />
+        <ProjectPicker
+          ref="projectPickerRef"
+          v-model="form.projectId"
+          v-model:bound="projectBound"
+        />
+
+        <el-form-item v-if="!projectBound" label="事项名称" prop="project">
+          <el-input v-model="form.project" maxlength="100" placeholder="例如：插件开发、需求评审" />
         </el-form-item>
 
         <el-form-item label="工作内容" prop="content">
@@ -348,6 +410,37 @@ onMounted(loadAll)
 .content-text {
   color: #475467;
   font-size: 12.5px;
+}
+
+.worklog-item-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.worklog-item-name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--wk-text);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worklog-project-category {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 7px;
+  color: #0b8b4f;
+  font-size: 10.5px;
+  line-height: 1.6;
+  background: #ecfdf3;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hours-text {
@@ -416,6 +509,29 @@ onMounted(loadAll)
   font-size: 13.5px;
   font-weight: 600;
   line-height: 1.5;
+}
+
+.log-card-project-name {
+  margin: 4px 0 0;
+  color: var(--wk-text);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.log-card-category {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  margin-top: 5px;
+  padding: 1px 7px;
+  color: #0b8b4f;
+  font-size: 10.5px;
+  line-height: 1.6;
+  background: #ecfdf3;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .log-card-content {

@@ -12,6 +12,7 @@ import { useTokenStore } from '@/store/token'
 import { useUserInfoStore } from '@/store/userInfo'
 
 const Dashboard = () => import('@/views/Dashboard.vue')
+const Project = () => import('@/views/Project.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -28,6 +29,7 @@ const router = createRouter({
         { path: '/memos', component: Memo, meta: { title: '备忘录' } },
         { path: '/worklogs', component: WorkLog, meta: { title: '工时登记' } },
         { path: '/timers', component: Timer, meta: { title: '计时' } },
+        { path: '/projects', component: Project, meta: { title: '项目管理' } },
         { path: '/users', component: User, meta: { title: '用户管理' } }
       ]
     },

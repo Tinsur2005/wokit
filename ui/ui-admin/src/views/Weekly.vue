@@ -13,8 +13,10 @@ import {
   Warning
 } from '@element-plus/icons-vue'
 import weeklyApi from '@/api/weekly'
+import ProjectPicker from '@/components/ProjectPicker.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import { useProjectStore } from '@/store/project'
 
 const pad = (num) => String(num).padStart(2, '0')
 const toDateStr = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
@@ -75,14 +77,19 @@ const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const editingId = ref(null)
 const formRef = ref()
+const projectPickerRef = ref()
+const projectBound = ref(false)
 const submitting = ref(false)
 const form = ref({
   taskContent: '',
   taskResult: '',
   problem: '',
   output: '',
-  extra: ''
+  extra: '',
+  projectId: null
 })
+
+const projectStore = useProjectStore()
 
 const rules = {
   taskContent: [
@@ -130,7 +137,8 @@ const goCurrentWeek = () => {
 const openCreate = () => {
   dialogMode.value = 'create'
   editingId.value = null
-  form.value = { taskContent: '', taskResult: '', problem: '', output: '', extra: '' }
+  projectBound.value = false
+  form.value = { taskContent: '', taskResult: '', problem: '', output: '', extra: '', projectId: null }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
 }
@@ -138,12 +146,14 @@ const openCreate = () => {
 const openEdit = (row) => {
   dialogMode.value = 'edit'
   editingId.value = row.id
+  projectBound.value = Boolean(row.projectId)
   form.value = {
     taskContent: row.taskContent,
     taskResult: row.taskResult || '',
     problem: row.problem || '',
     output: row.output || '',
-    extra: row.extra || ''
+    extra: row.extra || '',
+    projectId: row.projectId || null
   }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
@@ -151,6 +161,7 @@ const openEdit = (row) => {
 
 const submitForm = async () => {
   if (!formRef.value || submitting.value) return
+  if (!projectPickerRef.value?.validate()) return
   await formRef.value.validate()
   submitting.value = true
   try {
@@ -203,6 +214,7 @@ const buildReportText = () => {
         lines.push(`   ${label}：${value.trim()}`)
       }
     }
+    appendField('项目', projectStore.projectName(row.projectId))
     appendField('结果', row.taskResult)
     appendField('存在的问题', row.problem)
     appendField('产出', row.output)
@@ -229,7 +241,10 @@ const exportWeek = () => {
   ElMessage.success('本周周报已导出')
 }
 
-onMounted(loadList)
+onMounted(() => {
+  projectStore.load()
+  loadList()
+})
 </script>
 
 <template>
@@ -277,9 +292,14 @@ onMounted(loadList)
       <el-table v-loading="loading" :data="rows" class="wk-table weekly-table" row-key="id">
         <el-table-column label="任务内容" min-width="210">
           <template #default="{ row }">
-            <el-tooltip :content="row.taskContent" placement="top-start" :show-after="200" popper-class="wk-cell-tooltip">
-              <span class="cell-ellipsis task-text">{{ row.taskContent }}</span>
-            </el-tooltip>
+            <div class="weekly-task-cell">
+              <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag">
+                {{ projectStore.projectName(row.projectId) }}
+              </span>
+              <el-tooltip :content="row.taskContent" placement="top-start" :show-after="200" popper-class="wk-cell-tooltip">
+                <span class="cell-ellipsis task-text">{{ row.taskContent }}</span>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="结果" min-width="170">
@@ -337,6 +357,9 @@ onMounted(loadList)
               <el-button link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
             </div>
           </div>
+          <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag weekly-project-mobile">
+            {{ projectStore.projectName(row.projectId) }}
+          </span>
           <div class="weekly-fields">
             <div v-if="row.taskResult" class="weekly-field">
               <span class="field-label">结果</span>
@@ -371,6 +394,12 @@ onMounted(loadList)
         <el-icon :size="14"><DocumentChecked /></el-icon>
         <span>归属：{{ weekLabel }}（{{ rangeLabel }}）</span>
       </div>
+
+      <ProjectPicker
+        ref="projectPickerRef"
+        v-model="form.projectId"
+        v-model:bound="projectBound"
+      />
 
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" hide-required-asterisk>
         <el-form-item label="任务内容" prop="taskContent">
@@ -527,6 +556,39 @@ onMounted(loadList)
 
 .problem-text {
   color: #b54708;
+}
+
+.weekly-task-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.weekly-task-cell :deep(.el-tooltip__trigger) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.weekly-project-tag {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 7px;
+  color: #0b8b4f;
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 1.6;
+  background: #ecfdf3;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekly-project-mobile {
+  margin-top: 4px;
 }
 
 .weekly-table :deep(td.el-table__cell) {

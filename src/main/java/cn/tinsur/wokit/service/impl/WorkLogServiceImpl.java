@@ -1,7 +1,9 @@
 package cn.tinsur.wokit.service.impl;
 
 import cn.tinsur.wokit.exception.ServiceException;
+import cn.tinsur.wokit.mapper.ProjectMapper;
 import cn.tinsur.wokit.mapper.WorkLogMapper;
+import cn.tinsur.wokit.pojo.entity.Project;
 import cn.tinsur.wokit.pojo.entity.WorkLog;
 import cn.tinsur.wokit.pojo.query.WorkLogQuery;
 import cn.tinsur.wokit.pojo.vo.WorkLogStatVO;
@@ -11,6 +13,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
@@ -35,6 +38,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class WorkLogServiceImpl extends ServiceImpl<WorkLogMapper, WorkLog> implements IWorkLogService {
+
+    @Autowired
+    private ProjectMapper projectMapper;
 
     /**
      * 分页查询工时记录
@@ -100,6 +106,7 @@ public class WorkLogServiceImpl extends ServiceImpl<WorkLogMapper, WorkLog> impl
     @Override
     public Result add(WorkLog workLog, Long userId) {
         validateWorkLog(workLog);
+        validateProject(workLog.getProjectId(), userId);
         workLog.setId(null);
         workLog.setUserId(userId);
         save(workLog);
@@ -113,6 +120,7 @@ public class WorkLogServiceImpl extends ServiceImpl<WorkLogMapper, WorkLog> impl
     public Result update(Long id, WorkLog workLog, Long userId) {
         WorkLog dbWorkLog = getOwnWorkLog(id, userId);
         validateWorkLog(workLog);
+        validateProject(workLog.getProjectId(), userId);
         workLog.setId(dbWorkLog.getId());
         workLog.setUserId(userId);
         updateById(workLog);
@@ -130,11 +138,24 @@ public class WorkLogServiceImpl extends ServiceImpl<WorkLogMapper, WorkLog> impl
     }
 
     /**
-     * 校验工时字段：项目必填，日期必填，工时为 0-24 之间
+     * 校验绑定项目归属
+     */
+    private void validateProject(Long projectId, Long userId) {
+        if (projectId == null) {
+            return;
+        }
+        Project project = projectMapper.selectById(projectId);
+        if (project == null || !project.getUserId().equals(userId)) {
+            throw new ServiceException("绑定项目不存在或无权使用");
+        }
+    }
+
+    /**
+     * 校验工时字段：事项必填，日期必填，工时为 0-24 之间
      */
     private void validateWorkLog(WorkLog workLog) {
         if (ObjectUtils.isEmpty(workLog.getProject()) || workLog.getProject().trim().isEmpty()) {
-            throw new ServiceException("请填写项目或事项名称");
+            throw new ServiceException("请填写事项名称");
         }
         if (workLog.getWorkDate() == null) {
             throw new ServiceException("请选择工作日期");

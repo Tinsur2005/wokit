@@ -1,7 +1,9 @@
 package cn.tinsur.wokit.service.impl;
 
 import cn.tinsur.wokit.exception.ServiceException;
+import cn.tinsur.wokit.mapper.ProjectMapper;
 import cn.tinsur.wokit.mapper.TaskMapper;
+import cn.tinsur.wokit.pojo.entity.Project;
 import cn.tinsur.wokit.pojo.entity.Task;
 import cn.tinsur.wokit.pojo.query.TaskQuery;
 import cn.tinsur.wokit.pojo.vo.CalendarDayVO;
@@ -12,6 +14,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
@@ -36,6 +39,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements ITaskService {
+
+    @Autowired
+    private ProjectMapper projectMapper;
 
     /**
      * 分页查询任务
@@ -178,6 +184,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     @Override
     public Result add(Task task, Long userId) {
         validateTask(task);
+        validateProject(task.getProjectId(), userId);
         task.setId(null);
         task.setUserId(userId);
         task.setStatus(0);
@@ -194,6 +201,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         Task dbTask = getOwnTask(id, userId);
         // 2.校验字段
         validateTask(task);
+        validateProject(task.getProjectId(), userId);
         task.setId(dbTask.getId());
         task.setUserId(userId);
         // 状态不允许通过编辑接口修改，走单独的状态切换接口
@@ -226,6 +234,19 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         getOwnTask(id, userId);
         removeById(id);
         return Result.ok("任务已删除");
+    }
+
+    /**
+     * 校验绑定项目是否存在且属于当前用户；为空表示不绑定
+     */
+    private void validateProject(Long projectId, Long userId) {
+        if (projectId == null) {
+            return;
+        }
+        Project project = projectMapper.selectById(projectId);
+        if (project == null || !project.getUserId().equals(userId)) {
+            throw new ServiceException("绑定项目不存在或无权使用");
+        }
     }
 
     /**

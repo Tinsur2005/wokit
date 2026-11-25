@@ -30,7 +30,39 @@ CREATE TABLE `sys_user` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '平台用户表';
 
 -- ============================================================
--- 2. 每日任务表
+-- 2. 项目分类表
+-- ============================================================
+DROP TABLE IF EXISTS `work_project_category`;
+CREATE TABLE `work_project_category` (
+    `id`          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '分类ID',
+    `user_id`     BIGINT      NOT NULL COMMENT '所属用户ID',
+    `parent_id`   BIGINT      DEFAULT NULL COMMENT '父分类ID，空表示一级分类',
+    `name`        VARCHAR(20) NOT NULL COMMENT '分类名称',
+    `create_time` DATETIME    DEFAULT NULL COMMENT '创建时间',
+    `update_time` DATETIME    DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_project_category_user_name` (`user_id`, `name`),
+    KEY `idx_project_category_parent` (`user_id`, `parent_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '项目分类表';
+
+-- ============================================================
+-- 3. 项目表
+-- ============================================================
+DROP TABLE IF EXISTS `work_project`;
+CREATE TABLE `work_project` (
+    `id`          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '项目ID',
+    `user_id`     BIGINT      NOT NULL COMMENT '所属用户ID',
+    `category_id` BIGINT      NOT NULL COMMENT '分类ID',
+    `name`        VARCHAR(60) NOT NULL COMMENT '项目名称',
+    `create_time` DATETIME    DEFAULT NULL COMMENT '创建时间',
+    `update_time` DATETIME    DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_project_user_name` (`user_id`, `name`),
+    KEY `idx_project_user_category` (`user_id`, `category_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '项目表';
+
+-- ============================================================
+-- 4. 每日任务表
 -- ============================================================
 DROP TABLE IF EXISTS `work_task`;
 CREATE TABLE `work_task` (
@@ -41,15 +73,17 @@ CREATE TABLE `work_task` (
     `start_time`  DATETIME     NOT NULL COMMENT '开始时间',
     `deadline`    DATETIME     NOT NULL COMMENT '截止时间',
     `status`      TINYINT      NOT NULL DEFAULT 0 COMMENT '任务状态（0：待完成，1：已完成）',
+    `project_id`  BIGINT       DEFAULT NULL COMMENT '绑定项目ID',
     `create_time` DATETIME     DEFAULT NULL COMMENT '创建时间',
     `update_time` DATETIME     DEFAULT NULL COMMENT '更新时间',
     PRIMARY KEY (`id`),
     KEY `idx_task_user_deadline` (`user_id`, `deadline`),
-    KEY `idx_task_user_status` (`user_id`, `status`)
+    KEY `idx_task_user_status` (`user_id`, `status`),
+    KEY `idx_task_user_project` (`user_id`, `project_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '每日任务表';
 
 -- ============================================================
--- 3. 备忘录表（扩展小工具）
+-- 5. 备忘录表（扩展小工具）
 -- ============================================================
 DROP TABLE IF EXISTS `work_memo`;
 CREATE TABLE `work_memo` (
@@ -65,24 +99,26 @@ CREATE TABLE `work_memo` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '备忘录表';
 
 -- ============================================================
--- 4. 工时登记表（扩展小工具）
+-- 6. 工时登记表（扩展小工具）
 -- ============================================================
 DROP TABLE IF EXISTS `work_log`;
 CREATE TABLE `work_log` (
     `id`          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '工时记录ID',
     `user_id`     BIGINT        NOT NULL COMMENT '所属用户ID',
     `work_date`   DATE          NOT NULL COMMENT '工作日期',
-    `project`     VARCHAR(100)  NOT NULL COMMENT '项目/事项名称',
+    `project`     VARCHAR(100)  NOT NULL COMMENT '事项名称',
+    `project_id`  BIGINT        DEFAULT NULL COMMENT '绑定项目ID',
     `content`     VARCHAR(500)  DEFAULT NULL COMMENT '工作内容',
     `hours`       DECIMAL(5, 1) NOT NULL DEFAULT 0.0 COMMENT '工时（小时）',
     `create_time` DATETIME      DEFAULT NULL COMMENT '创建时间',
     `update_time` DATETIME      DEFAULT NULL COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    KEY `idx_log_user_date` (`user_id`, `work_date`)
+    KEY `idx_log_user_date` (`user_id`, `work_date`),
+    KEY `idx_log_user_project` (`user_id`, `project_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '工时登记表';
 
 -- ============================================================
--- 5. 周报记录表（扩展小工具）
+-- 7. 周报记录表（扩展小工具）
 -- ============================================================
 DROP TABLE IF EXISTS `work_weekly`;
 CREATE TABLE `work_weekly` (
@@ -90,6 +126,7 @@ CREATE TABLE `work_weekly` (
     `user_id`      BIGINT       NOT NULL COMMENT '所属用户ID',
     `week_start`   DATE         NOT NULL COMMENT '周起始日期（周一）',
     `week_end`     DATE         NOT NULL COMMENT '周结束日期（周日）',
+    `project_id`   BIGINT       DEFAULT NULL COMMENT '绑定项目ID',
     `task_content` VARCHAR(200) NOT NULL COMMENT '任务内容',
     `task_result`  VARCHAR(500) DEFAULT NULL COMMENT '任务结果',
     `problem`      VARCHAR(500) DEFAULT NULL COMMENT '存在的问题',
@@ -98,11 +135,12 @@ CREATE TABLE `work_weekly` (
     `create_time`  DATETIME     DEFAULT NULL COMMENT '创建时间',
     `update_time`  DATETIME     DEFAULT NULL COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    KEY `idx_weekly_user_week` (`user_id`, `week_start`)
+    KEY `idx_weekly_user_week` (`user_id`, `week_start`),
+    KEY `idx_weekly_user_project` (`user_id`, `project_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '周报记录表';
 
 -- ============================================================
--- 6. 计时表（扩展小工具）
+-- 8. 计时表（扩展小工具）
 -- ============================================================
 DROP TABLE IF EXISTS `work_timer`;
 CREATE TABLE `work_timer` (
@@ -118,7 +156,7 @@ CREATE TABLE `work_timer` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '计时表';
 
 -- ============================================================
--- 7. 初始化账号
+-- 9. 初始化账号
 --    管理员 admin / 123456，普通用户 demo / 123456
 --    密码均为 BCrypt 哈希，不可直接改成明文
 -- ============================================================
@@ -128,7 +166,7 @@ VALUES
 (2, 'demo',  '$2a$10$KokTJd5qxyOW4E1VFTdcGuhp/yLkZdzJLnJ0nCQRTWihwpKI5LxSC', '演示用户', '13900000000', 'demo@wokit.cn', 0, 1, NOW(), NOW());
 
 -- ============================================================
--- 8. 任务演示数据（以执行脚本当天为基准，避免日期过期）
+-- 10. 任务演示数据（以执行脚本当天为基准，避免日期过期）
 -- ============================================================
 INSERT INTO `work_task` (`user_id`, `title`, `description`, `start_time`, `deadline`, `status`, `create_time`, `update_time`)
 VALUES
@@ -150,7 +188,7 @@ VALUES
  TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 7 DAY), '14:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 7 DAY), '16:00:00'), 0, NOW(), NOW());
 
 -- ============================================================
--- 9. 备忘录演示数据
+-- 11. 备忘录演示数据
 -- ============================================================
 INSERT INTO `work_memo` (`user_id`, `content`, `color`, `pinned`, `create_time`, `update_time`)
 VALUES
@@ -159,7 +197,7 @@ VALUES
 (1, '每周五 17:00 前提交工时登记，避免月底补录。', 'green', 0, NOW(), NOW());
 
 -- ============================================================
--- 10. 工时登记演示数据
+-- 12. 工时登记演示数据
 -- ============================================================
 INSERT INTO `work_log` (`user_id`, `work_date`, `project`, `content`, `hours`, `create_time`, `update_time`)
 VALUES
@@ -168,7 +206,7 @@ VALUES
 (1, DATE_SUB(CURDATE(), INTERVAL 2 DAY), 'Wokit 工作助手', '数据库设计与项目骨架搭建', 5.5, NOW(), NOW());
 
 -- ============================================================
--- 11. 周报演示数据（本周一为基准，随执行日期自动调整）
+-- 13. 周报演示数据（本周一为基准，随执行日期自动调整）
 -- ============================================================
 INSERT INTO `work_weekly` (`user_id`, `week_start`, `week_end`, `task_content`, `task_result`, `problem`, `output`, `extra`, `create_time`, `update_time`)
 VALUES

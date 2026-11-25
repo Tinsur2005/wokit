@@ -6,6 +6,7 @@ import {
   AlarmClock,
   Calendar,
   DocumentChecked,
+  FolderOpened,
   HomeFilled,
   Lock,
   Memo,
@@ -16,6 +17,7 @@ import {
   User
 } from '@element-plus/icons-vue'
 import userApi from '@/api/user'
+import brandMark from '@/assets/brand-mark.png'
 import { useTokenStore } from '@/store/token'
 import { useUserInfoStore } from '@/store/userInfo'
 
@@ -36,7 +38,8 @@ const menus = computed(() => {
     { path: '/weeklies', name: '周报记录', icon: DocumentChecked },
     { path: '/memos', name: '备忘录', icon: Memo },
     { path: '/worklogs', name: '工时登记', icon: Timer },
-    { path: '/timers', name: '计时', icon: AlarmClock }
+    { path: '/timers', name: '计时', icon: AlarmClock },
+    { path: '/projects', name: '项目管理', icon: FolderOpened }
   ]
   if (userInfoStore.isAdmin) {
     list.push({ path: '/users', name: '用户管理', icon: User })
@@ -45,7 +48,7 @@ const menus = computed(() => {
 })
 
 const bottomMenus = computed(() =>
-  menus.value.filter((item) => item.path !== '/users')
+  menus.value.filter((item) => item.path !== '/users' && item.path !== '/projects')
 )
 
 const avatarText = computed(() => {
@@ -134,7 +137,7 @@ onMounted(() => {
   <div class="layout">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">w</div>
+        <img class="brand-mark" :src="brandMark" alt="" />
         <div class="brand-text">
           <p class="brand-name">Wokit</p>
           <p class="brand-sub">工作助手</p>
@@ -183,7 +186,7 @@ onMounted(() => {
           <el-icon :size="19"><Menu /></el-icon>
         </button>
         <div class="mobile-brand">
-          <span class="brand-mark brand-mark--sm">w</span>
+          <img class="brand-mark brand-mark--sm" :src="brandMark" alt="" />
           <span>Wokit</span>
         </div>
         <div class="user-avatar user-avatar--sm">{{ avatarText }}</div>
@@ -210,7 +213,7 @@ onMounted(() => {
     <el-drawer v-model="drawerVisible" direction="ltr" size="252px" :with-header="false">
       <div class="drawer-body">
         <div class="brand brand--drawer">
-          <div class="brand-mark">w</div>
+          <img class="brand-mark" :src="brandMark" alt="" />
           <div class="brand-text">
             <p class="brand-name">Wokit</p>
             <p class="brand-sub">工作助手</p>
@@ -295,27 +298,16 @@ onMounted(() => {
 }
 
 .brand-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--wk-primary);
-  color: #fff;
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.5px;
-  box-shadow: 0 2px 6px rgba(18, 183, 106, 0.22);
+  display: block;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .brand-mark--sm {
   width: 26px;
   height: 26px;
-  border-radius: 7px;
-  font-size: 15px;
-  box-shadow: none;
 }
 
 .brand-name {

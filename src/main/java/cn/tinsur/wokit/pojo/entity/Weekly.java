@@ -51,6 +51,12 @@ public class Weekly implements Serializable {
     private Date weekEnd;
 
     /**
+     * 绑定项目ID
+     */
+    @TableField("project_id")
+    private Long projectId;
+
+    /**
      * 任务内容
      */
     @TableField("task_content")

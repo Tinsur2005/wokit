@@ -14,8 +14,10 @@ import {
   TrendCharts
 } from '@element-plus/icons-vue'
 import taskApi from '@/api/task'
+import ProjectPicker from '@/components/ProjectPicker.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import { useProjectStore } from '@/store/project'
 
 const pad = (num) => String(num).padStart(2, '0')
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
@@ -43,13 +45,18 @@ const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const editingId = ref(null)
 const formRef = ref()
+const projectPickerRef = ref()
+const projectBound = ref(false)
 const submitting = ref(false)
 const form = ref({
   title: '',
   description: '',
   startTime: '',
-  deadline: ''
+  deadline: '',
+  projectId: null
 })
+
+const projectStore = useProjectStore()
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -184,11 +191,13 @@ const handleStartChange = () => {
 
 const openCreate = () => {  dialogMode.value = 'create'
   editingId.value = null
+  projectBound.value = false
   form.value = {
     title: '',
     description: '',
     startTime: `${selectedDate.value} 09:00:00`,
-    deadline: `${selectedDate.value} 18:00:00`
+    deadline: `${selectedDate.value} 18:00:00`,
+    projectId: null
   }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
@@ -197,11 +206,13 @@ const openCreate = () => {  dialogMode.value = 'create'
 const openEdit = (task) => {
   dialogMode.value = 'edit'
   editingId.value = task.id
+  projectBound.value = Boolean(task.projectId)
   form.value = {
     title: task.title,
     description: task.description || '',
     startTime: task.startTime,
-    deadline: task.deadline
+    deadline: task.deadline,
+    projectId: task.projectId || null
   }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
@@ -209,6 +220,7 @@ const openEdit = (task) => {
 
 const submitTask = async () => {
   if (!formRef.value || submitting.value) return
+  if (!projectPickerRef.value?.validate()) return
   await formRef.value.validate()
   submitting.value = true
   try {
@@ -216,7 +228,8 @@ const submitTask = async () => {
       title: form.value.title,
       description: form.value.description,
       startTime: form.value.startTime,
-      deadline: form.value.deadline
+      deadline: form.value.deadline,
+      projectId: form.value.projectId || null
     }
     const result = editingId.value
       ? await taskApi.update(editingId.value, payload)
@@ -274,6 +287,7 @@ const isOverdue = (task) => {
 }
 
 onMounted(() => {
+  projectStore.load()
   refreshAll()
 })
 </script>
@@ -418,6 +432,10 @@ onMounted(() => {
                 </div>
                 <p v-if="task.description" class="task-desc">{{ task.description }}</p>
                 <div class="task-meta">
+                  <span v-if="projectStore.projectName(task.projectId)" class="task-project">
+                    {{ projectStore.projectName(task.projectId) }}
+                  </span>
+                  <span v-if="projectStore.projectName(task.projectId)" class="meta-sep">·</span>
                   <span class="time">{{ timeRange(task) }}</span>
                   <span class="meta-sep">·</span>
                   <span :class="task.status === 1 ? 'state-done' : 'state-pending'">
@@ -476,6 +494,11 @@ onMounted(() => {
             placeholder="补充任务背景、验收标准或注意事项（选填）"
           />
         </el-form-item>
+        <ProjectPicker
+          ref="projectPickerRef"
+          v-model="form.projectId"
+          v-model:bound="projectBound"
+        />
         <div class="time-grid">
           <el-form-item label="开始时间" prop="startTime">
             <el-date-picker
@@ -843,6 +866,20 @@ onMounted(() => {
   margin-top: 5px;
   color: #98a2b3;
   font-size: 11.5px;
+  flex-wrap: wrap;
+}
+
+.task-project {
+  max-width: 170px;
+  overflow: hidden;
+  padding: 1px 6px;
+  color: #0b8b4f;
+  font-size: 11px;
+  line-height: 1.5;
+  background: #ecfdf3;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .time {

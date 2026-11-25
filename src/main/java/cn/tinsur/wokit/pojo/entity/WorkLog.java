@@ -45,9 +45,15 @@ public class WorkLog implements Serializable {
     private Date workDate;
 
     /**
-     * 项目/事项名称
+     * 事项名称
      */
     private String project;
+
+    /**
+     * 绑定项目ID
+     */
+    @TableField("project_id")
+    private Long projectId;
 
     /**
      * 工作内容

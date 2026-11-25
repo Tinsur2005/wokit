@@ -1,9 +1,11 @@
 package cn.tinsur.wokit.service.impl;
 
+import cn.tinsur.wokit.mapper.ProjectMapper;
 import cn.tinsur.wokit.mapper.TaskMapper;
 import cn.tinsur.wokit.mapper.TimerItemMapper;
 import cn.tinsur.wokit.mapper.WeeklyMapper;
 import cn.tinsur.wokit.mapper.WorkLogMapper;
+import cn.tinsur.wokit.pojo.entity.Project;
 import cn.tinsur.wokit.pojo.entity.Task;
 import cn.tinsur.wokit.pojo.entity.TimerItem;
 import cn.tinsur.wokit.pojo.entity.Weekly;
@@ -57,6 +59,9 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Autowired
     private TimerItemMapper timerItemMapper;
+
+    @Autowired
+    private ProjectMapper projectMapper;
 
     @Override
     public DashboardVO get(Long userId) {
@@ -184,13 +189,30 @@ public class DashboardServiceImpl implements IDashboardService {
                 .ge(WorkLog::getWorkDate, startOfDay(start))
                 .lt(WorkLog::getWorkDate, startOfDay(end)));
 
+        List<Long> projectIds = workLogs.stream()
+                .map(WorkLog::getProjectId)
+                .filter(projectId -> projectId != null)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, String> projectNameMap = projectIds.isEmpty()
+                ? Map.of()
+                : projectMapper.selectList(new LambdaQueryWrapper<Project>()
+                        .eq(Project::getUserId, userId)
+                        .in(Project::getId, projectIds))
+                .stream()
+                .collect(Collectors.toMap(Project::getId, Project::getName));
+
         Map<String, BigDecimal> projectMap = new LinkedHashMap<>();
         for (WorkLog workLog : workLogs) {
             if (workLog.getHours() == null) {
                 continue;
             }
-            String project = workLog.getProject() == null || workLog.getProject().trim().isEmpty()
-                    ? "未命名项目" : workLog.getProject().trim();
+            String boundProjectName = workLog.getProjectId() == null
+                    ? null : projectNameMap.get(workLog.getProjectId());
+            String project = boundProjectName != null && !boundProjectName.trim().isEmpty()
+                    ? boundProjectName.trim()
+                    : (workLog.getProject() == null || workLog.getProject().trim().isEmpty()
+                    ? "未命名事项" : workLog.getProject().trim());
             projectMap.merge(project, workLog.getHours(), BigDecimal::add);
         }
 

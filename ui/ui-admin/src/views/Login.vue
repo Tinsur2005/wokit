@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
+import brandLockup from '@/assets/brand-lockup.png'
 import userApi from '@/api/user'
 import { useTokenStore } from '@/store/token'
 import { useUserInfoStore } from '@/store/userInfo'
@@ -50,11 +51,7 @@ const submit = async () => {
     <div class="login-shell">
       <aside class="login-aside">
         <div class="brand">
-          <div class="brand-mark">w</div>
-          <div>
-            <p class="brand-name">Wokit</p>
-            <p class="brand-sub">工作助手</p>
-          </div>
+          <img class="brand-lockup" :src="brandLockup" alt="Wokit 工作助手" />
         </div>
 
         <div class="aside-copy">
@@ -73,6 +70,9 @@ const submit = async () => {
       </aside>
 
       <main class="login-main">
+        <div class="mobile-login-brand">
+          <img :src="brandLockup" alt="Wokit 工作助手" />
+        </div>
         <div class="form-head">
           <h2>欢迎回来</h2>
           <p class="form-sub">使用平台账号进入工作台</p>
@@ -142,36 +142,18 @@ const submit = async () => {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 
-.brand-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--wk-primary);
-  color: #fff;
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.5px;
-  box-shadow: 0 2px 6px rgba(18, 183, 106, 0.22);
+.brand-lockup {
+  display: block;
+  width: 236px;
+  max-width: 100%;
+  height: auto;
+  margin-left: -5px;
 }
 
-.brand-name {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.2px;
-}
-
-.brand-sub {
-  color: var(--wk-text-3);
-  font-size: 11px;
-  line-height: 1.4;
+.mobile-login-brand {
+  display: none;
 }
 
 .aside-copy {
@@ -270,6 +252,19 @@ const submit = async () => {
 
   .login-main {
     padding: 30px 24px 26px;
+  }
+
+  .mobile-login-brand {
+    display: block;
+    width: 190px;
+    margin-bottom: 24px;
+  }
+
+  .mobile-login-brand img {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-left: -4px;
   }
 
   .form-head h2 {

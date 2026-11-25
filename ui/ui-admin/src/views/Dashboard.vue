@@ -27,8 +27,29 @@ const todayText = computed(() => {
 const monthHoursText = computed(() => Number(dashboard.value.monthHours || 0).toFixed(1))
 
 const taskTrend = computed(() => dashboard.value.taskTrend || [])
-const projectHours = computed(() => dashboard.value.projectHours || [])
+const projectHours = computed(() => {
+  const merged = new Map()
+  for (const item of dashboard.value.projectHours || []) {
+    const name = String(item.project || '').trim() || '未命名事项'
+    merged.set(name, (merged.get(name) || 0) + Number(item.hours || 0))
+  }
+  return [...merged.entries()]
+    .map(([project, hours]) => ({
+      project,
+      hours: Number(hours.toFixed(1))
+    }))
+    .sort((a, b) => b.hours - a.hours)
+})
 const weeklyTrend = computed(() => dashboard.value.weeklyTrend || [])
+
+const shortenLabel = (value, maxLength = 9) =>
+  value.length > maxLength ? `${value.slice(0, maxLength)}…` : value
+const escapeHtml = (value) => String(value)
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;')
 
 const taskEmpty = computed(() =>
   taskTrend.value.every((point) => Number(point.created || 0) === 0 && Number(point.completed || 0) === 0)
@@ -125,14 +146,15 @@ const projectHoursOption = computed(() => {
     name: item.project,
     value: Number(item.hours || 0)
   }))
+  const compactLegend = data.length <= 2
   return {
     textStyle: chartTextStyle,
     color: ['#12B76A', '#2E90FA', '#F79009', '#7C5CD6', '#14B8A6', '#98A2B3'],
     title: {
       text: `${monthHoursText.value}h`,
       subtext: '本月工时',
-      left: 'center',
-      top: '36%',
+      left: compactLegend ? 'center' : '34%',
+      top: compactLegend ? '36%' : '33%',
       itemGap: 3,
       textStyle: { color: '#101828', fontSize: 20, fontWeight: 600 },
       subtextStyle: { color: '#98A2B3', fontSize: 11 }
@@ -140,23 +162,43 @@ const projectHoursOption = computed(() => {
     tooltip: {
       trigger: 'item',
       ...tooltipStyle,
-      formatter: '{b}<br/>{c} 小时 · {d}%'
+      formatter: (params) => {
+        const name = escapeHtml(params.name)
+        return `${name}<br/>${Number(params.value || 0).toFixed(1)} 小时 · ${params.percent}%`
+      }
     },
-    legend: {
-      bottom: 2,
-      left: 'center',
-      icon: 'circle',
-      itemWidth: 8,
-      itemHeight: 8,
-      itemGap: 14,
-      textStyle: { color: '#667085', fontSize: 11 }
-    },
+    legend: compactLegend
+      ? {
+          bottom: 6,
+          left: 'center',
+          icon: 'circle',
+          itemWidth: 8,
+          itemHeight: 8,
+          itemGap: 14,
+          textStyle: { color: '#667085', fontSize: 11 },
+          formatter: (name) => shortenLabel(name, 11)
+        }
+      : {
+          type: 'scroll',
+          orient: 'vertical',
+          right: 2,
+          top: 36,
+          bottom: 14,
+          icon: 'circle',
+          itemWidth: 8,
+          itemHeight: 8,
+          itemGap: 9,
+          textStyle: { color: '#667085', fontSize: 10.5 },
+          pageIconSize: 8,
+          pageTextStyle: { color: '#98A2B3', fontSize: 9 },
+          formatter: (name) => shortenLabel(name, 9)
+        },
     series: [
       {
         name: '项目工时',
         type: 'pie',
-        radius: ['54%', '72%'],
-        center: ['50%', '44%'],
+        radius: compactLegend ? ['54%', '72%'] : ['47%', '66%'],
+        center: compactLegend ? ['50%', '44%'] : ['34%', '47%'],
         avoidLabelOverlap: true,
         itemStyle: { borderColor: '#ffffff', borderWidth: 2, borderRadius: 4 },
         label: { show: false },
