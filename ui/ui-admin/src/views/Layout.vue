@@ -85,6 +85,7 @@ const loadUserInfo = async () => {
 }
 
 const handleCommand = async (command) => {
+  drawerVisible.value = false
   if (command === 'settings') {
     router.push('/settings/general')
     return
@@ -247,9 +248,18 @@ onMounted(() => {
             </div>
           </div>
           <div class="drawer-actions">
-            <el-button v-if="canEnterSettings" plain size="small" :icon="Setting" @click="handleCommand('settings')">系统设置</el-button>
-            <el-button plain size="small" :icon="Lock" @click="handleCommand('password')">修改密码</el-button>
-            <el-button plain size="small" :icon="SwitchButton" @click="handleCommand('logout')">退出</el-button>
+            <button v-if="canEnterSettings" type="button" class="drawer-action" @click="handleCommand('settings')">
+              <el-icon :size="16"><Setting /></el-icon>
+              <span>系统设置</span>
+            </button>
+            <button type="button" class="drawer-action" @click="handleCommand('password')">
+              <el-icon :size="16"><Lock /></el-icon>
+              <span>修改密码</span>
+            </button>
+            <button type="button" class="drawer-action drawer-action--danger" @click="handleCommand('logout')">
+              <el-icon :size="16"><SwitchButton /></el-icon>
+              <span>退出登录</span>
+            </button>
           </div>
         </div>
       </div>
@@ -487,6 +497,44 @@ onMounted(() => {
 .drawer-actions {
   display: flex;
   gap: 8px;
+}
+
+.drawer-action {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 52px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  border: 1px solid #eceff3;
+  border-radius: 10px;
+  background: #fff;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.drawer-action:hover,
+.drawer-action:active {
+  border-color: var(--wk-primary-line);
+  background: var(--wk-primary-soft);
+  color: #0b8b4f;
+}
+
+.drawer-action--danger {
+  color: #b42318;
+}
+
+.drawer-action--danger:hover,
+.drawer-action--danger:active {
+  border-color: #fecdca;
+  background: #fff6f5;
+  color: #b42318;
 }
 
 /* ---------- 响应式 ---------- */

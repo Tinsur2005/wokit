@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { AlarmClock, Calendar, CircleCheck, Clock, Refresh } from '@element-plus/icons-vue'
+import { AlarmClock, Calendar, CircleCheck, Clock } from '@element-plus/icons-vue'
 import dashboardApi from '@/api/dashboard'
 import EChart from '@/components/EChart.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import StatCard from '@/components/StatCard.vue'
 
 const loading = ref(false)
@@ -296,7 +297,7 @@ onMounted(load)
         <p class="wk-page-desc">{{ todayText }} · 今天的工作，一眼看清</p>
       </div>
       <div class="wk-page-actions">
-        <el-button :icon="Refresh" :loading="loading" plain size="small" @click="load">刷新</el-button>
+        <RefreshButton cooldown-key="dashboard" :loading="loading" plain size="small" @refresh="load" />
       </div>
     </div>
 

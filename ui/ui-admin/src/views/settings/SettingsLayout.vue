@@ -62,7 +62,6 @@ const backToWorkbench = () => {
       </div>
 
       <div class="settings-title">
-        <p class="settings-kicker">SYSTEM</p>
         <h1>系统设置</h1>
       </div>
 
@@ -183,12 +182,6 @@ const backToWorkbench = () => {
 .settings-title {
   padding: 2px 10px 14px;
   border-bottom: 1px solid #eceff3;
-}
-
-.settings-kicker {
-  color: #98a2b3;
-  font-size: 10px;
-  letter-spacing: 1.2px;
 }
 
 .settings-title h1 {

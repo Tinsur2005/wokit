@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Coin, Delete, Edit, Plus, Search, TrendCharts } from '@element-plus/icons-vue'
 import workLogApi from '@/api/worklog'
 import ProjectPicker from '@/components/ProjectPicker.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useProjectStore } from '@/store/project'
@@ -241,7 +242,7 @@ onMounted(() => {
             @clear="handleSearch"
           />
           <el-button v-if="hasBtnPermission('worklog:search')" @click="handleSearch">搜索</el-button>
-          <el-button @click="loadAll">刷新</el-button>
+          <RefreshButton cooldown-key="worklog" :loading="loading" @refresh="loadAll" />
         </div>
         <p class="list-count">当前月共 {{ total }} 条记录</p>
       </div>
