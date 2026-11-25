@@ -58,16 +58,12 @@ const submit = async () => {
 
         <div class="aside-copy">
           <h1>把每天的工作，<br />收进一个工作台</h1>
-          <p class="aside-desc">
-            日历式的任务安排、随手记下的备忘、可回溯的工时，
-            以及值得期待的计时。
-          </p>
         </div>
 
         <ul class="feature-list">
-          <li><span class="feature-dot"></span>按截止日期查看当日任务，完成状态一目了然</li>
-          <li><span class="feature-dot"></span>备忘录与工时登记，保留工作过程的痕迹</li>
-          <li><span class="feature-dot"></span>账号统一管理，支持启用与停用</li>
+          <li><span class="feature-dot"></span>快速查看每日任务，按优先级完成任务</li>
+          <li><span class="feature-dot"></span>按任务快速添加周报，一键导出整周周报</li>
+          <li><span class="feature-dot"></span>清晰的工时登记，快速提升工作效率</li>
         </ul>
       </aside>
 
@@ -170,14 +166,6 @@ const submit = async () => {
   letter-spacing: -0.6px;
 }
 
-.aside-desc {
-  margin-top: 14px;
-  max-width: 310px;
-  color: #5c6b7a;
-  font-size: 13px;
-  line-height: 1.85;
-}
-
 .feature-list {
   margin: 26px 0 0;
   padding: 0;
@@ -209,7 +197,8 @@ const submit = async () => {
 .login-main {
   display: flex;
   flex-direction: column;
-  padding: 50px 52px 30px;
+  justify-content: center;
+  padding: 40px 52px;
   background: #fff;
 }
 
