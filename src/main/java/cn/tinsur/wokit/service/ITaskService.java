@@ -18,7 +18,7 @@ public interface ITaskService extends IService<Task> {
     IPage<Task> list(TaskQuery taskQuery, Long userId);
 
     /**
-     * 查询某一天截止的任务列表
+     * 查询时间区间覆盖某一天的任务列表
      */
     List<Task> listByDate(Long userId, String date);
 

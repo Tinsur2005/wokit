@@ -26,9 +26,9 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * <p>
@@ -60,11 +60,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
                         .like(Task::getDescription, taskQuery.getKeyword()))
                 .eq(!ObjectUtils.isEmpty(taskQuery.getStatus()), Task::getStatus, taskQuery.getStatus());
 
-        // 按截止日期筛选
+        // 筛选时间区间覆盖当天的任务
         if (!ObjectUtils.isEmpty(taskQuery.getDate())) {
             LocalDate day = parseDate(taskQuery.getDate());
-            lambdaQueryWrapper.ge(Task::getDeadline, startOfDay(day))
-                    .lt(Task::getDeadline, startOfDay(day.plusDays(1)));
+            filterActiveOnDay(lambdaQueryWrapper, day);
         }
         // 待完成排在前面，再按截止时间升序
         lambdaQueryWrapper.orderByAsc(Task::getStatus).orderByAsc(Task::getDeadline);
@@ -72,22 +71,21 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     }
 
     /**
-     * 查询某一天截止的任务列表
+     * 查询某一天时间区间覆盖的任务列表
      */
     @Override
     public List<Task> listByDate(Long userId, String date) {
         LocalDate day = parseDate(date);
         LambdaQueryWrapper<Task> lambdaQueryWrapper = new LambdaQueryWrapper<>();
-        lambdaQueryWrapper.eq(Task::getUserId, userId)
-                .ge(Task::getDeadline, startOfDay(day))
-                .lt(Task::getDeadline, startOfDay(day.plusDays(1)))
-                .orderByAsc(Task::getStatus)
+        lambdaQueryWrapper.eq(Task::getUserId, userId);
+        filterActiveOnDay(lambdaQueryWrapper, day);
+        lambdaQueryWrapper.orderByAsc(Task::getStatus)
                 .orderByAsc(Task::getDeadline);
         return list(lambdaQueryWrapper);
     }
 
     /**
-     * 查询某个月每天的任务数量标记
+     * 查询某个月每天的任务数量标记（跨天任务在覆盖的每一天都计数）
      */
     @Override
     public List<CalendarDayVO> calendar(Long userId, String month) {
@@ -101,24 +99,44 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
             throw new ServiceException("月份格式不正确，应为 yyyy-MM");
         }
 
-        // 1.只查这个月需要的截止时间和状态两个字段
+        LocalDate monthStart = yearMonth.atDay(1);
+        LocalDate monthEnd = yearMonth.atEndOfMonth();
+        LocalDate nextMonthStart = yearMonth.plusMonths(1).atDay(1);
+
+        // 1.查询与本月有交集的任务，只取开始、截止和状态字段
         LambdaQueryWrapper<Task> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.eq(Task::getUserId, userId)
-                .ge(Task::getDeadline, startOfDay(yearMonth.atDay(1)))
-                .lt(Task::getDeadline, startOfDay(yearMonth.plusMonths(1).atDay(1)))
-                .select(Task::getDeadline, Task::getStatus);
+                .ge(Task::getDeadline, startOfDay(monthStart))
+                .lt(Task::getStartTime, startOfDay(nextMonthStart))
+                .select(Task::getStartTime, Task::getDeadline, Task::getStatus);
         List<Task> taskList = list(lambdaQueryWrapper);
 
-        // 2.按截止日期分组，统计每天的总数和未完成数
-        Map<LocalDate, List<Task>> groupByDate = taskList.stream()
-                .collect(Collectors.groupingBy(task -> toLocalDate(task.getDeadline())));
+        // 2.把每个任务按实际覆盖日期展开，逐天累计总数和未完成数
+        Map<LocalDate, int[]> dailyStats = new HashMap<>();
+        for (Task task : taskList) {
+            LocalDate start = toLocalDate(task.getStartTime());
+            LocalDate end = toLocalDate(task.getDeadline());
+            if (start.isBefore(monthStart)) {
+                start = monthStart;
+            }
+            if (end.isAfter(monthEnd)) {
+                end = monthEnd;
+            }
+            for (LocalDate day = start; !day.isAfter(end); day = day.plusDays(1)) {
+                int[] stats = dailyStats.computeIfAbsent(day, key -> new int[2]);
+                stats[0]++;
+                if (task.getStatus() != null && task.getStatus() == 0) {
+                    stats[1]++;
+                }
+            }
+        }
 
         List<CalendarDayVO> calendarDayVOList = new ArrayList<>();
-        groupByDate.forEach((day, tasks) -> {
+        dailyStats.forEach((day, stats) -> {
             CalendarDayVO vo = new CalendarDayVO();
             vo.setDate(day.toString());
-            vo.setTotal(tasks.size());
-            vo.setPending((int) tasks.stream().filter(task -> task.getStatus() != null && task.getStatus() == 0).count());
+            vo.setTotal(stats[0]);
+            vo.setPending(stats[1]);
             calendarDayVOList.add(vo);
         });
         calendarDayVOList.sort((a, b) -> a.getDate().compareTo(b.getDate()));
@@ -139,18 +157,16 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
 
         TaskStatVO vo = new TaskStatVO();
 
-        // 今日截止任务总数与待办数
+        // 今日时间区间覆盖的任务总数与待办数
         LambdaQueryWrapper<Task> todayWrapper = new LambdaQueryWrapper<>();
-        todayWrapper.eq(Task::getUserId, userId)
-                .ge(Task::getDeadline, startOfDay(today))
-                .lt(Task::getDeadline, startOfDay(today.plusDays(1)));
+        todayWrapper.eq(Task::getUserId, userId);
+        filterActiveOnDay(todayWrapper, today);
         vo.setTodayTotal(Math.toIntExact(count(todayWrapper)));
 
         LambdaQueryWrapper<Task> todayPendingWrapper = new LambdaQueryWrapper<>();
         todayPendingWrapper.eq(Task::getUserId, userId)
-                .eq(Task::getStatus, 0)
-                .ge(Task::getDeadline, startOfDay(today))
-                .lt(Task::getDeadline, startOfDay(today.plusDays(1)));
+                .eq(Task::getStatus, 0);
+        filterActiveOnDay(todayPendingWrapper, today);
         vo.setTodayPending(Math.toIntExact(count(todayPendingWrapper)));
 
         // 本周完成数量：按更新时间统计，状态切换为已完成时刷新
@@ -161,18 +177,18 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
                 .lt(Task::getUpdateTime, startOfDay(nextWeekStart));
         vo.setWeekCompleted(Math.toIntExact(count(weekWrapper)));
 
-        // 本月任务总数与完成数
+        // 本月任务总数与完成数：统计与本月有交集的唯一任务
         LambdaQueryWrapper<Task> monthWrapper = new LambdaQueryWrapper<>();
         monthWrapper.eq(Task::getUserId, userId)
                 .ge(Task::getDeadline, startOfDay(monthStart))
-                .lt(Task::getDeadline, startOfDay(nextMonthStart));
+                .lt(Task::getStartTime, startOfDay(nextMonthStart));
         vo.setMonthTotal(Math.toIntExact(count(monthWrapper)));
 
         LambdaQueryWrapper<Task> monthCompletedWrapper = new LambdaQueryWrapper<>();
         monthCompletedWrapper.eq(Task::getUserId, userId)
                 .eq(Task::getStatus, 1)
                 .ge(Task::getDeadline, startOfDay(monthStart))
-                .lt(Task::getDeadline, startOfDay(nextMonthStart));
+                .lt(Task::getStartTime, startOfDay(nextMonthStart));
         vo.setMonthCompleted(Math.toIntExact(count(monthCompletedWrapper)));
 
         return vo;
@@ -283,6 +299,15 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
             throw new ServiceException("无权操作该任务");
         }
         return task;
+    }
+
+    /**
+     * 筛选时间区间覆盖指定日期的任务：
+     * 开始时间早于次日零点，且截止时间不早于当天零点。
+     */
+    private void filterActiveOnDay(LambdaQueryWrapper<Task> wrapper, LocalDate day) {
+        wrapper.ge(Task::getDeadline, startOfDay(day))
+                .lt(Task::getStartTime, startOfDay(day.plusDays(1)));
     }
 
     /**

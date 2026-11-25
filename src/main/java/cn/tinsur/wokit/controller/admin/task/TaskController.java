@@ -47,7 +47,7 @@ public class TaskController {
     }
 
     /**
-     * 查询某一天截止的任务列表
+     * 查询时间区间覆盖某一天的任务列表
      * GET /admin/tasks/date?date=2026-11-24
      */
     @GetMapping("/date")

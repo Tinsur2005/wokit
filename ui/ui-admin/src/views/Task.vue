@@ -276,9 +276,11 @@ const removeTask = async (task) => {
   }
 }
 
+const formatDateTime = (value) => (value ? value.slice(0, 16) : '--')
+
 const timeRange = (task) => {
-  const start = task.startTime ? task.startTime.slice(11, 16) : '--:--'
-  const end = task.deadline ? task.deadline.slice(11, 16) : '--:--'
+  const start = formatDateTime(task.startTime)
+  const end = formatDateTime(task.deadline)
   return `${start} - ${end}`
 }
 
@@ -298,7 +300,7 @@ onMounted(() => {
     <div class="wk-page-head">
       <div>
         <h1 class="wk-page-title">每日任务</h1>
-        <p class="wk-page-desc">按日期安排任务，用截止时间收口，把今天的事做完。</p>
+        <p class="wk-page-desc">按时间范围安排任务，范围内每天都会展示，用截止时间收口。</p>
       </div>
       <div class="wk-page-actions">
         <el-button v-if="hasBtnPermission('task:add')" type="primary" :icon="Plus" @click="openCreate">新建任务</el-button>
@@ -399,7 +401,7 @@ onMounted(() => {
                 {{ pendingCount > 0 ? `${pendingCount} 项待办` : '已全部完成' }}
               </span>
             </div>
-            <p class="day-sub">当日截止任务 · 共 {{ tasks.length }} 项</p>
+            <p class="day-sub">当日任务 · 共 {{ tasks.length }} 项</p>
           </div>
           <el-tooltip v-if="hasBtnPermission('task:add')" content="添加当日任务" placement="top">
             <button class="day-add" type="button" aria-label="添加任务" @click="openCreate">

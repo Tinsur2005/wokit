@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus } from '@element-plus/icons-vue'
 import permissionApi from '@/api/permission'
 import EmptyState from '@/components/EmptyState.vue'
+import { menuIconMap, menuIconOptions } from '@/utils/menuIcons'
 import hasBtnPermission from '@/utils/btnPermission'
 
 const treeData = ref([])
@@ -269,9 +270,10 @@ loadTree()
         row-key="id"
         class="wk-table permission-table"
         default-expand-all
+        :indent="24"
         :tree-props="{ children: 'children' }"
       >
-        <el-table-column prop="name" label="权限名称" min-width="230">
+        <el-table-column prop="name" label="权限名称" :min-width="isCompact ? 180 : 230">
           <template #default="{ row }">
             <div class="name-cell">
               <span class="type-tag" :class="typeTag(row.type)">{{ typeLabel(row.type) }}</span>
@@ -314,12 +316,16 @@ loadTree()
           v-if="!isCompact"
           prop="icon"
           label="图标"
-          width="120"
+          width="150"
           class-name="perm-icon-col"
           label-class-name="perm-icon-col"
         >
           <template #default="{ row }">
-            <span :class="row.icon ? '' : 'wk-muted'">{{ row.icon || '—' }}</span>
+            <span v-if="row.icon" class="icon-cell">
+              <el-icon v-if="menuIconMap[row.icon]"><component :is="menuIconMap[row.icon]" /></el-icon>
+              <span>{{ row.icon }}</span>
+            </span>
+            <span v-else class="wk-muted">—</span>
           </template>
         </el-table-column>
         <el-table-column
@@ -348,7 +354,7 @@ loadTree()
         <el-table-column
           v-if="hasBtnPermission('permission:add') || hasBtnPermission('permission:edit') || hasBtnPermission('permission:delete')"
           label="操作"
-          width="240"
+          :width="isCompact ? 176 : 240"
           fixed="right"
         >
           <template #default="{ row }">
@@ -357,15 +363,15 @@ loadTree()
                 v-if="hasBtnPermission('permission:add') && row.type !== 2"
                 link
                 type="primary"
-                :icon="Plus"
+                :icon="isCompact ? undefined : Plus"
                 @click="openChildCreate(row)"
               >
                 添加下级
               </el-button>
-              <el-button v-if="hasBtnPermission('permission:edit')" link type="primary" :icon="Edit" @click="openEdit(row)">
+              <el-button v-if="hasBtnPermission('permission:edit')" link type="primary" :icon="isCompact ? undefined : Edit" @click="openEdit(row)">
                 编辑
               </el-button>
-              <el-button v-if="hasBtnPermission('permission:delete')" link type="danger" :icon="Delete" @click="removePermission(row)">
+              <el-button v-if="hasBtnPermission('permission:delete')" link type="danger" :icon="isCompact ? undefined : Delete" @click="removePermission(row)">
                 删除
               </el-button>
             </div>
@@ -418,7 +424,27 @@ loadTree()
         </el-form-item>
 
         <el-form-item v-if="form.type !== 2" label="菜单图标">
-          <el-input v-model="form.icon" maxlength="50" placeholder="Element Plus 图标名，例如 Setting" />
+          <el-select v-model="form.icon" clearable placeholder="请选择菜单图标" style="width: 100%" popper-class="menu-icon-popper">
+            <el-option
+              v-for="item in menuIconOptions"
+              :key="item.value"
+              :label="`${item.label} · ${item.value}`"
+              :value="item.value"
+            >
+              <div class="icon-option">
+                <el-icon><component :is="item.component" /></el-icon>
+                <span class="icon-option-label">{{ item.label }}</span>
+                <span class="icon-option-value">{{ item.value }}</span>
+              </div>
+            </el-option>
+            <template #label="{ label, value }">
+              <span class="icon-select-label">
+                <el-icon v-if="menuIconMap[value]"><component :is="menuIconMap[value]" /></el-icon>
+                <span>{{ label }}</span>
+              </span>
+            </template>
+          </el-select>
+          <p class="form-tip">图标用于左侧菜单展示，清空后使用默认图标。</p>
         </el-form-item>
 
         <el-form-item v-if="form.type === 2" label="按钮权限标识" prop="permissionValue">
@@ -465,9 +491,54 @@ loadTree()
 }
 
 .name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.icon-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-cell .el-icon,
+.icon-select-label .el-icon {
+  color: var(--wk-primary);
+}
+
+.icon-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+:global(.menu-icon-popper .icon-option) {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+}
+
+:global(.menu-icon-popper .icon-option .el-icon) {
+  color: var(--wk-primary);
+}
+
+:global(.menu-icon-popper .icon-option-label) {
+  flex: 1;
+}
+
+:global(.menu-icon-popper .icon-option-value) {
+  color: var(--wk-text-3);
+  font-size: 12px;
+}
+
+.permission-table :deep(.el-table__indent),
+.permission-table :deep(.el-table__expand-icon) {
+  vertical-align: middle;
 }
 
 .type-tag {

@@ -86,13 +86,13 @@ public class DashboardServiceImpl implements IDashboardService {
     }
 
     /**
-     * 统计某日期区间内截止的任务数
+     * 统计某日期区间内时间覆盖的任务数
      */
     private Integer countTask(Long userId, Integer status, LocalDate start, LocalDate end) {
         LambdaQueryWrapper<Task> wrapper = new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
                 .ge(Task::getDeadline, startOfDay(start))
-                .lt(Task::getDeadline, startOfDay(end));
+                .lt(Task::getStartTime, startOfDay(end));
         if (status != null) {
             wrapper.eq(Task::getStatus, status);
         }

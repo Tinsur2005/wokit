@@ -2,23 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  AlarmClock,
-  Calendar,
-  DocumentChecked,
-  FolderOpened,
-  HomeFilled,
-  Lock,
-  Memo,
-  Menu,
-  MoreFilled,
-  Setting,
-  SwitchButton,
-  Timer,
-  User
-} from '@element-plus/icons-vue'
+import { Lock, Menu, MoreFilled, Setting, SwitchButton } from '@element-plus/icons-vue'
 import userApi from '@/api/user'
 import brandMark from '@/assets/brand-mark.png'
+import { menuIconMap } from '@/utils/menuIcons'
 import { useSystemConfigStore } from '@/store/systemConfig'
 import { useTokenStore } from '@/store/token'
 import { useUserInfoStore } from '@/store/userInfo'
@@ -34,18 +21,6 @@ const passwordFormRef = ref()
 const passwordForm = ref({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const savingPassword = ref(false)
 
-const iconMap = {
-  AlarmClock,
-  Calendar,
-  DocumentChecked,
-  FolderOpened,
-  HomeFilled,
-  Memo,
-  Setting,
-  Timer,
-  User
-}
-
 const workbenchRoot = computed(() =>
   (userInfoStore.routerList || []).find((item) => item.type === 0 && item.path === '/')
 )
@@ -57,7 +32,7 @@ const menus = computed(() => {
     .map((item) => ({
       path: item.path,
       name: item.name,
-      icon: iconMap[item.icon] || Menu
+      icon: menuIconMap[item.icon] || Menu
     }))
 })
 
