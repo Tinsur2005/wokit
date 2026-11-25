@@ -18,3 +18,7 @@ mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl #mybatis官方提供的控制台打印日志
   type-aliases-package: cn.tinsur.wokit.pojo
+
+wokit:
+  backup:
+    secret: ${WOKIT_BACKUP_SECRET:wokit-backup-2026-v1-change-me}

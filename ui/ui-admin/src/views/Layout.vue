@@ -1,9 +1,18 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Lock, Menu, MoreFilled, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { ElLoading, ElMessage, ElMessageBox } from 'element-plus'
+import {
+  Download,
+  Lock,
+  Menu,
+  MoreFilled,
+  Setting,
+  SwitchButton,
+  Upload
+} from '@element-plus/icons-vue'
 import userApi from '@/api/user'
+import userDataApi from '@/api/userData'
 import brandMark from '@/assets/brand-mark.png'
 import { menuIconMap } from '@/utils/menuIcons'
 import { useSystemConfigStore } from '@/store/systemConfig'
@@ -20,6 +29,7 @@ const passwordDialog = ref(false)
 const passwordFormRef = ref()
 const passwordForm = ref({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const savingPassword = ref(false)
+const restoreFileInput = ref()
 
 const workbenchRoot = computed(() =>
   (userInfoStore.routerList || []).find((item) => item.type === 0 && item.path === '/')
@@ -90,6 +100,14 @@ const handleCommand = async (command) => {
     router.push('/settings/general')
     return
   }
+  if (command === 'export-data') {
+    await exportUserData()
+    return
+  }
+  if (command === 'restore-data') {
+    await startRestore()
+    return
+  }
   if (command === 'password') {
     passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
     passwordDialog.value = true
@@ -105,6 +123,112 @@ const handleCommand = async (command) => {
     userInfoStore.removeUserInfo()
     ElMessage.success('已退出登录')
     router.push('/login')
+  }
+}
+
+const backupStamp = () => {
+  const now = new Date()
+  const pad = (num) => String(num).padStart(2, '0')
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+}
+
+const exportUserData = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '导出文件包含当前账号的全部工作台数据，并已加密保存。请勿手动修改导出文件；如需调整数据，请在系统内修改后重新导出。私自修改文件会导致数据校验失败，无法恢复。',
+      '导出数据',
+      {
+        confirmButtonText: '继续导出',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+  const loading = ElLoading.service({
+    lock: true,
+    text: '正在导出数据...',
+    background: 'rgba(255, 255, 255, 0.72)'
+  })
+  try {
+    const blob = await userDataApi.exportData()
+    if (!(blob instanceof Blob)) {
+      ElMessage.error('系统繁忙，请稍后重试')
+      return
+    }
+    const header = await blob.slice(0, 7).text()
+    if (blob.size < 35 || header !== 'WOKITB1') {
+      ElMessage.error('系统繁忙，请稍后重试')
+      return
+    }
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `wokit-backup-${backupStamp()}.wokit`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    ElMessage.success('数据已导出')
+  } catch {
+    // 请求异常已由统一拦截器提示
+  } finally {
+    loading.close()
+  }
+}
+
+const startRestore = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '恢复数据会覆盖当前账号现有的全部工作台数据，操作不可撤销。确认继续吗？',
+      '恢复数据',
+      {
+        confirmButtonText: '选择恢复文件',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+  restoreFileInput.value?.click()
+}
+
+const handleRestoreFile = async (event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  try {
+    await ElMessageBox.confirm(
+      '导入恢复文件后，会先删除当前账号的所有工作台数据，再写入文件中的数据。现有数据将被完全覆盖且无法恢复，确认继续吗？',
+      '再次确认恢复',
+      {
+        confirmButtonText: '确认覆盖恢复',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+  const loading = ElLoading.service({
+    lock: true,
+    text: '正在恢复数据...',
+    background: 'rgba(255, 255, 255, 0.72)'
+  })
+  try {
+    const result = await userDataApi.restoreData(file)
+    if (result.code === 1) {
+      ElMessage.success(result.msg || '数据恢复完成')
+      setTimeout(() => window.location.reload(), 800)
+    } else {
+      ElMessage.error(result.msg)
+    }
+  } catch {
+    // 请求异常已由统一拦截器提示
+  } finally {
+    loading.close()
   }
 }
 
@@ -177,7 +301,9 @@ onMounted(() => {
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item v-if="canEnterSettings" command="settings" :icon="Setting">系统设置</el-dropdown-item>
-                <el-dropdown-item command="password" :icon="Lock">修改密码</el-dropdown-item>
+                <el-dropdown-item command="export-data" :icon="Download">数据导出</el-dropdown-item>
+                <el-dropdown-item command="restore-data" :icon="Upload">数据恢复</el-dropdown-item>
+                <el-dropdown-item command="password" :icon="Lock" divided>修改密码</el-dropdown-item>
                 <el-dropdown-item command="logout" :icon="SwitchButton" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -246,24 +372,32 @@ onMounted(() => {
               <p class="user-name">{{ userInfoStore.displayName }}</p>
               <p class="user-role">{{ userInfoStore.roleName }}</p>
             </div>
-          </div>
-          <div class="drawer-actions">
-            <button v-if="canEnterSettings" type="button" class="drawer-action" @click="handleCommand('settings')">
-              <el-icon :size="16"><Setting /></el-icon>
-              <span>系统设置</span>
-            </button>
-            <button type="button" class="drawer-action" @click="handleCommand('password')">
-              <el-icon :size="16"><Lock /></el-icon>
-              <span>修改密码</span>
-            </button>
-            <button type="button" class="drawer-action drawer-action--danger" @click="handleCommand('logout')">
-              <el-icon :size="16"><SwitchButton /></el-icon>
-              <span>退出登录</span>
-            </button>
+            <el-dropdown trigger="click" placement="top-end" @command="handleCommand">
+              <button class="icon-button" type="button" aria-label="账号操作">
+                <el-icon :size="16"><MoreFilled /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="canEnterSettings" command="settings" :icon="Setting">系统设置</el-dropdown-item>
+                  <el-dropdown-item command="export-data" :icon="Download">数据导出</el-dropdown-item>
+                  <el-dropdown-item command="restore-data" :icon="Upload">数据恢复</el-dropdown-item>
+                  <el-dropdown-item command="password" :icon="Lock" divided>修改密码</el-dropdown-item>
+                  <el-dropdown-item command="logout" :icon="SwitchButton" divided>退出登录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </div>
     </el-drawer>
+
+    <input
+      ref="restoreFileInput"
+      type="file"
+      class="restore-file-input"
+      accept=".wokit,.dat,.bin,application/octet-stream"
+      @change="handleRestoreFile"
+    />
 
     <el-dialog v-model="passwordDialog" title="修改密码" width="420px" :close-on-click-modal="false">
       <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-position="top">
@@ -436,6 +570,10 @@ onMounted(() => {
   line-height: 1.4;
 }
 
+.user-chip .icon-button {
+  flex-shrink: 0;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -494,47 +632,8 @@ onMounted(() => {
   gap: 10px;
 }
 
-.drawer-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.drawer-action {
-  display: flex;
-  flex: 1 1 0;
-  min-width: 0;
-  height: 52px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 0 4px;
-  border: 1px solid #eceff3;
-  border-radius: 10px;
-  background: #fff;
-  color: #667085;
-  font-size: 11px;
-  line-height: 1.2;
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.drawer-action:hover,
-.drawer-action:active {
-  border-color: var(--wk-primary-line);
-  background: var(--wk-primary-soft);
-  color: #0b8b4f;
-}
-
-.drawer-action--danger {
-  color: #b42318;
-}
-
-.drawer-action--danger:hover,
-.drawer-action--danger:active {
-  border-color: #fecdca;
-  background: #fff6f5;
-  color: #b42318;
+.restore-file-input {
+  display: none;
 }
 
 /* ---------- 响应式 ---------- */

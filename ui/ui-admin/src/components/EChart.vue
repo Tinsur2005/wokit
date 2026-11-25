@@ -26,7 +26,8 @@ const props = defineProps({
   option: { type: Object, required: true },
   height: { type: String, default: '300px' },
   empty: { type: Boolean, default: false },
-  emptyText: { type: String, default: '暂无数据' }
+  emptyText: { type: String, default: '暂无数据' },
+  loading: { type: Boolean, default: false }
 })
 
 const chartEl = ref()
@@ -69,8 +70,8 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="chart-wrap" :style="{ height }">
-    <div ref="chartEl" class="chart-canvas"></div>
-    <div v-if="empty" class="chart-empty">{{ emptyText }}</div>
+    <div ref="chartEl" class="chart-canvas" v-loading="loading" element-loading-background="rgba(255, 255, 255, 0.92)"></div>
+    <div v-if="empty && !loading" class="chart-empty">{{ emptyText }}</div>
   </div>
 </template>
 

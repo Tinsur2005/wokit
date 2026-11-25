@@ -6,7 +6,7 @@ import EChart from '@/components/EChart.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import StatCard from '@/components/StatCard.vue'
 
-const loading = ref(false)
+const loading = ref(true)
 const loadFailed = ref(false)
 const dashboard = ref({
   todayPending: 0,
@@ -326,7 +326,8 @@ onMounted(load)
           <EChart
             :option="taskTrendOption"
             height="var(--dash-chart-main)"
-            :empty="taskEmpty"
+            :empty="taskEmpty && !loadFailed"
+            :loading="loading"
             empty-text="近 7 天暂无任务记录"
           />
         </div>
@@ -343,7 +344,8 @@ onMounted(load)
           <EChart
             :option="projectHoursOption"
             height="var(--dash-chart-main)"
-            :empty="projectEmpty"
+            :empty="projectEmpty && !loadFailed"
+            :loading="loading"
             empty-text="本月还没有工时记录"
           />
         </div>
@@ -362,7 +364,8 @@ onMounted(load)
         <EChart
           :option="weeklyTrendOption"
           height="var(--dash-chart-sub)"
-          :empty="weeklyEmpty"
+          :empty="weeklyEmpty && !loadFailed"
+          :loading="loading"
           empty-text="近 4 周还没有周报记录"
         />
       </div>
