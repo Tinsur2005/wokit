@@ -119,6 +119,17 @@ public class TaskController {
     }
 
     /**
+     * 修改任务优先级
+     * PUT /admin/tasks/priority/1?priority=0
+     */
+    @PutMapping("/priority/{id}")
+    public Result changePriority(@PathVariable Long id,
+                                 @RequestParam Integer priority,
+                                 HttpServletRequest request) {
+        return taskService.changePriority(id, priority, AuthUtil.getUserId(request));
+    }
+
+    /**
      * 删除任务（真实删除）
      * DELETE /admin/tasks/1
      */

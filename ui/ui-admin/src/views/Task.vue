@@ -14,9 +14,11 @@ import {
   TrendCharts
 } from '@element-plus/icons-vue'
 import taskApi from '@/api/task'
+import weeklyApi from '@/api/weekly'
 import ProjectPicker from '@/components/ProjectPicker.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import WeeklyCreateDialog from '@/components/WeeklyCreateDialog.vue'
 import { useProjectStore } from '@/store/project'
 import hasBtnPermission from '@/utils/btnPermission'
 
@@ -28,6 +30,12 @@ const parseDate = (str) => {
 }
 
 const todayStr = formatDate(new Date())
+const weekStartOf = (value) => {
+  const date = parseDate(value)
+  const day = date.getDay() || 7
+  date.setDate(date.getDate() - day + 1)
+  return formatDate(date)
+}
 
 const selectedDate = ref(todayStr)
 const viewMonth = ref(todayStr.slice(0, 7))
@@ -49,6 +57,14 @@ const formRef = ref()
 const projectPickerRef = ref()
 const projectBound = ref(false)
 const submitting = ref(false)
+const weeklyDialogVisible = ref(false)
+const weeklySubmitting = ref(false)
+const pendingCompleteTask = ref(null)
+const weeklySeed = ref({
+  weekStart: '',
+  taskContent: '',
+  projectId: null
+})
 const form = ref({
   title: '',
   description: '',
@@ -69,10 +85,10 @@ const priorityOptions = [
 ]
 
 const statusOptions = [
-  { value: 0, label: '待处理', tagType: 'info' },
-  { value: 1, label: '进行中', tagType: 'primary' },
-  { value: 2, label: '阻塞中', tagType: 'warning' },
-  { value: 3, label: '已完成', tagType: 'success' }
+  { value: 0, label: '待处理', tone: 'pending' },
+  { value: 1, label: '进行中', tone: 'progress' },
+  { value: 2, label: '阻塞中', tone: 'blocked' },
+  { value: 3, label: '已完成', tone: 'done' }
 ]
 
 const priorityMap = Object.fromEntries(priorityOptions.map((item) => [item.value, item]))
@@ -282,9 +298,93 @@ const submitTask = async () => {
   }
 }
 
-const toggleTask = async (task) => {
-  const nextStatus = isDone(task) ? 0 : 3
-  const result = await taskApi.changeStatus(task.id, nextStatus)
+const applyTaskStatus = async (task, status, showMessage = true) => {
+  const result = await taskApi.changeStatus(task.id, status)
+  if (result.code === 1) {
+    if (showMessage) ElMessage.success(result.msg)
+    await refreshAll()
+    return true
+  }
+  ElMessage.error(result.msg)
+  return false
+}
+
+const updateTaskStatus = async (task, status) => {
+  if (status === task.status) return
+  if (status === 3 && !isDone(task)) {
+    await promptWeeklySync(task)
+    return
+  }
+  await applyTaskStatus(task, status)
+}
+
+const buildWeeklyTaskContent = (task) => {
+  const title = (task.title || '').trim()
+  const description = (task.description || '').trim()
+  if (!description) return title.slice(0, 200)
+  const prefix = `${title}-`
+  const available = Math.max(0, 200 - prefix.length)
+  return `${prefix}${description.slice(0, available)}`
+}
+
+const promptWeeklySync = async (task) => {
+  try {
+    await ElMessageBox.confirm(
+      '任务完成后是否同步添加一条周报记录？',
+      '同步添加周报',
+      {
+        confirmButtonText: '添加周报',
+        cancelButtonText: '暂不添加'
+      }
+    )
+  } catch {
+    await applyTaskStatus(task, 3)
+    return
+  }
+  pendingCompleteTask.value = task
+  weeklySeed.value = {
+    weekStart: weekStartOf(todayStr),
+    taskContent: buildWeeklyTaskContent(task),
+    projectId: task.projectId || null
+  }
+  weeklyDialogVisible.value = true
+}
+
+const submitWeeklyWithCompletion = async (payload) => {
+  const task = pendingCompleteTask.value
+  if (!task || weeklySubmitting.value) return
+  weeklySubmitting.value = true
+  try {
+    const weeklyResult = await weeklyApi.add(payload)
+    if (weeklyResult.code !== 1) {
+      ElMessage.error(weeklyResult.msg)
+      return
+    }
+    const taskResult = await taskApi.changeStatus(task.id, 3)
+    if (taskResult.code !== 1) {
+      ElMessage.error(taskResult.msg)
+      return
+    }
+    pendingCompleteTask.value = null
+    weeklyDialogVisible.value = false
+    await refreshAll()
+    ElMessage.success('任务已完成，周报已添加')
+  } finally {
+    weeklySubmitting.value = false
+  }
+}
+
+const resetPendingCompletion = () => {
+  pendingCompleteTask.value = null
+  weeklySubmitting.value = false
+}
+
+const toggleTask = (task) => updateTaskStatus(task, isDone(task) ? 0 : 3)
+const changeTaskStatus = (task, status) => updateTaskStatus(task, status)
+
+const updateTaskPriority = async (task, priority) => {
+  if (priority === task.priority) return
+  const result = await taskApi.changePriority(task.id, priority)
   if (result.code === 1) {
     ElMessage.success(result.msg)
     await refreshAll()
@@ -292,6 +392,8 @@ const toggleTask = async (task) => {
     ElMessage.error(result.msg)
   }
 }
+
+const changeTaskPriority = (task, priority) => updateTaskPriority(task, priority)
 
 const removeTask = async (task) => {
   await ElMessageBox.confirm(`确定删除「${task.title}」吗？删除后不可恢复。`, '删除任务', {
@@ -463,11 +565,40 @@ onMounted(() => {
 
               <div class="task-body">
                 <div class="task-title-line">
-                  <span class="task-priority" :class="'is-' + getPriority(task.priority).tone">
-                    {{ getPriority(task.priority).label }}
-                  </span>
+                  <el-dropdown
+                    trigger="click"
+                    :disabled="!hasBtnPermission('task:edit')"
+                    class="task-priority-dropdown"
+                    @command="(priority) => changeTaskPriority(task, priority)"
+                  >
+                    <span
+                      class="task-priority"
+                      :class="[
+                        'is-' + getPriority(task.priority).tone,
+                        { 'is-clickable': hasBtnPermission('task:edit') }
+                      ]"
+                    >
+                      {{ getPriority(task.priority).label }}
+                    </span>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          v-for="item in priorityOptions"
+                          :key="item.value"
+                          :command="item.value"
+                        >
+                          <el-icon v-if="task.priority === item.value" class="status-check">
+                            <Check />
+                          </el-icon>
+                          <span :class="{ 'status-option-active': task.priority === item.value }">
+                            {{ item.label }}
+                          </span>
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                   <p class="task-title">{{ task.title }}</p>
-                  <span v-if="isDueToday(task)" class="due-today">今日截止</span>
+                  <span v-if="isDueToday(task) && !isDone(task)" class="due-today">今日截止</span>
                   <span v-if="isOverdue(task)" class="overdue">已逾期</span>
                 </div>
                 <p v-if="task.description" class="task-desc">{{ task.description }}</p>
@@ -478,14 +609,40 @@ onMounted(() => {
                   <span v-if="projectStore.projectName(task.projectId)" class="meta-sep">·</span>
                   <span class="time">{{ timeRange(task) }}</span>
                   <span class="meta-sep">·</span>
-                  <el-tag
-                    size="small"
-                    effect="plain"
-                    :type="getStatus(task.status).tagType"
-                    class="task-status-tag"
+                  <el-dropdown
+                    trigger="click"
+                    :disabled="!hasBtnPermission('task:toggle')"
+                    class="task-status-dropdown"
+                    @command="(status) => changeTaskStatus(task, status)"
                   >
-                    {{ getStatus(task.status).label }}
-                  </el-tag>
+                    <el-tag
+                      size="small"
+                      effect="plain"
+                      class="task-status-tag"
+                      :class="[
+                        'status-' + getStatus(task.status).tone,
+                        { 'is-clickable': hasBtnPermission('task:toggle') }
+                      ]"
+                    >
+                      {{ getStatus(task.status).label }}
+                    </el-tag>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          v-for="item in statusOptions"
+                          :key="item.value"
+                          :command="item.value"
+                        >
+                          <el-icon v-if="task.status === item.value" class="status-check">
+                            <Check />
+                          </el-icon>
+                          <span :class="{ 'status-option-active': task.status === item.value }">
+                            {{ item.label }}
+                          </span>
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </div>
               </div>
 
@@ -597,6 +754,16 @@ onMounted(() => {
         </el-button>
       </template>
     </el-dialog>
+
+    <WeeklyCreateDialog
+      v-model="weeklyDialogVisible"
+      :week-start="weeklySeed.weekStart"
+      :initial-task-content="weeklySeed.taskContent"
+      :initial-project-id="weeklySeed.projectId"
+      :loading="weeklySubmitting"
+      @submit="submitWeeklyWithCompletion"
+      @closed="resetPendingCompletion"
+    />
   </section>
 </template>
 
@@ -843,29 +1010,29 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--wk-line-soft);
-  border-left: 3px solid transparent;
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  border-radius: 8px;
 }
 
 .task-row.priority-urgent {
-  border-left-color: #f04438;
+  background: #fff5f4;
 }
 
 .task-row.priority-important {
-  border-left-color: #f79009;
+  background: #fffaf0;
 }
 
 .task-row.priority-normal {
-  border-left-color: #84caff;
+  background: #f5f9ff;
 }
 
 .task-row.priority-low {
-  border-left-color: #d0d5dd;
+  background: #f8f9fb;
 }
 
 .task-row:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .task-row.is-done {
@@ -925,6 +1092,19 @@ onMounted(() => {
   font-size: 10.5px;
   font-weight: 500;
   line-height: 18px;
+}
+
+.task-priority.is-clickable {
+  cursor: pointer;
+}
+
+.task-priority.is-clickable:hover {
+  box-shadow: 0 0 0 2px rgba(18, 183, 106, 0.12);
+}
+
+.task-priority-dropdown {
+  display: inline-flex;
+  vertical-align: middle;
 }
 
 .task-priority.is-urgent {
@@ -1023,6 +1203,54 @@ onMounted(() => {
   flex-shrink: 0;
   height: 20px;
   padding: 0 6px;
+}
+
+.task-status-tag.status-pending {
+  color: #667085;
+  background: #f2f4f7;
+  border-color: #e4e7ec;
+}
+
+.task-status-tag.status-progress {
+  color: #175cd3;
+  background: #eff8ff;
+  border-color: #b2ddff;
+}
+
+.task-status-tag.status-blocked {
+  color: #b54708;
+  background: #fffaeb;
+  border-color: #fedf89;
+}
+
+.task-status-tag.status-done {
+  color: #067647;
+  background: #ecfdf3;
+  border-color: #abefc6;
+}
+
+.task-status-tag.is-clickable {
+  cursor: pointer;
+}
+
+.task-status-tag.is-clickable:hover {
+  box-shadow: 0 0 0 2px rgba(18, 183, 106, 0.12);
+}
+
+.task-status-dropdown {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.status-check {
+  margin-right: 5px;
+  color: var(--wk-primary);
+  font-size: 12px;
+}
+
+.status-option-active {
+  color: var(--wk-primary);
+  font-weight: 600;
 }
 
 .task-ops {

@@ -48,6 +48,11 @@ public interface ITaskService extends IService<Task> {
     Result changeStatus(Long id, Integer status, Long userId);
 
     /**
+     * 修改任务优先级
+     */
+    Result changePriority(Long id, Integer priority, Long userId);
+
+    /**
      * 删除任务（真实删除）
      */
     Result delete(Long id, Long userId);

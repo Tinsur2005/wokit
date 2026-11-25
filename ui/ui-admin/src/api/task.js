@@ -25,6 +25,9 @@ export default {
   changeStatus(id, status) {
     return request.put(`/tasks/status/${id}`, null, { params: { status } })
   },
+  changePriority(id, priority) {
+    return request.put(`/tasks/priority/${id}`, null, { params: { priority } })
+  },
   remove(id) {
     return request.delete(`/tasks/${id}`)
   }

@@ -69,9 +69,9 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
             LocalDate day = parseDate(taskQuery.getDate());
             filterActiveOnDay(lambdaQueryWrapper, day);
         }
-        // 未完成排在前面，再按优先级和截止时间排序
-        lambdaQueryWrapper.orderByAsc(Task::getStatus)
-                .orderByAsc(Task::getPriority)
+        // 按优先级、状态和截止时间排序
+        lambdaQueryWrapper.orderByAsc(Task::getPriority)
+                .orderByAsc(Task::getStatus)
                 .orderByAsc(Task::getDeadline);
         return page(new Page<>(pageNum, pageSize), lambdaQueryWrapper);
     }
@@ -85,8 +85,8 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         LambdaQueryWrapper<Task> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.eq(Task::getUserId, userId);
         filterActiveOnDay(lambdaQueryWrapper, day);
-        lambdaQueryWrapper.orderByAsc(Task::getStatus)
-                .orderByAsc(Task::getPriority)
+        lambdaQueryWrapper.orderByAsc(Task::getPriority)
+                .orderByAsc(Task::getStatus)
                 .orderByAsc(Task::getDeadline);
         return list(lambdaQueryWrapper);
     }
@@ -261,6 +261,27 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
             case 1 -> "任务已进入进行中";
             case 2 -> "任务已标记为阻塞中";
             default -> "任务已完成";
+        });
+    }
+
+    /**
+     * 修改任务优先级
+     */
+    @Override
+    public Result changePriority(Long id, Integer priority, Long userId) {
+        Task dbTask = getOwnTask(id, userId);
+        if (priority == null || priority < 0 || priority > 3) {
+            throw new ServiceException("任务优先级值不正确");
+        }
+        Task updateTask = new Task();
+        updateTask.setId(dbTask.getId());
+        updateTask.setPriority(priority);
+        updateById(updateTask);
+        return Result.ok(switch (priority) {
+            case 0 -> "任务优先级已设为紧急";
+            case 1 -> "任务优先级已设为重要";
+            case 2 -> "任务优先级已设为普通";
+            default -> "任务优先级已设为低优先级";
         });
     }
 
