@@ -69,7 +69,13 @@ public class Weekly implements Serializable {
     private String taskResult;
 
     /**
-     * 存在的问题
+     * 已解决问题及解决方式
+     */
+    @TableField("resolved_problem")
+    private String resolvedProblem;
+
+    /**
+     * 仍存在的问题
      */
     private String problem;
 

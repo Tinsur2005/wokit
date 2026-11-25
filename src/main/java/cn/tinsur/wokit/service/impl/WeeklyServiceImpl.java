@@ -116,12 +116,14 @@ public class WeeklyServiceImpl extends ServiceImpl<WeeklyMapper, Weekly> impleme
             throw new ServiceException("任务内容不能超过200个字");
         }
         checkLength(weekly.getTaskResult(), 500, "任务结果不能超过500个字");
-        checkLength(weekly.getProblem(), 500, "存在的问题不能超过500个字");
+        checkLength(weekly.getResolvedProblem(), 500, "已解决问题及解决方式不能超过500个字");
+        checkLength(weekly.getProblem(), 500, "仍存在的问题不能超过500个字");
         checkLength(weekly.getOutput(), 500, "产出不能超过500个字");
         checkLength(weekly.getExtra(), 500, "其他补充不能超过500个字");
 
         weekly.setTaskContent(weekly.getTaskContent().trim());
         weekly.setTaskResult(trim(weekly.getTaskResult()));
+        weekly.setResolvedProblem(trim(weekly.getResolvedProblem()));
         weekly.setProblem(trim(weekly.getProblem()));
         weekly.setOutput(trim(weekly.getOutput()));
         weekly.setExtra(trim(weekly.getExtra()));

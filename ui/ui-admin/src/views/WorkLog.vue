@@ -255,14 +255,9 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="事项" min-width="160">
           <template #default="{ row }">
-            <div v-if="projectStore.projectName(row.projectId)" class="worklog-item-cell">
-              <span class="worklog-item-name">{{ projectStore.projectName(row.projectId) }}</span>
-              <span class="worklog-project-category">
-                {{ projectStore.projectCategoryName(row.projectId) || '未分类' }}
-              </span>
-            </div>
-            <div v-else class="worklog-item-cell">
-              <span class="worklog-item-name">{{ row.project }}</span>
+            <div class="worklog-item-cell">
+              <span class="worklog-item-name">{{ workLogName(row) }}</span>
+              <span v-if="row.projectId" class="worklog-project-tag">项目</span>
             </div>
           </template>
         </el-table-column>
@@ -300,13 +295,10 @@ onMounted(() => {
               <el-button v-if="hasBtnPermission('worklog:delete')" link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
             </div>
           </div>
-          <div v-if="projectStore.projectName(row.projectId)" class="log-card-project">
-            <p class="log-card-project-name">{{ projectStore.projectName(row.projectId) }}</p>
-            <span class="log-card-category">
-              {{ projectStore.projectCategoryName(row.projectId) || '未分类' }}
-            </span>
+          <div class="log-card-project">
+            <p class="log-card-project-name">{{ workLogName(row) }}</p>
+            <span v-if="row.projectId" class="log-card-project-tag">项目</span>
           </div>
-          <p v-else class="log-card-project">{{ row.project }}</p>
           <p v-if="row.content" class="log-card-content">{{ row.content }}</p>
           <p v-else class="wk-muted log-card-content">未填写工作内容</p>
         </article>
@@ -416,14 +408,14 @@ onMounted(() => {
 
 .worklog-item-cell {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
 .worklog-item-name {
-  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   color: var(--wk-text);
   font-size: 12.5px;
@@ -431,17 +423,15 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.worklog-project-category {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 1px 7px;
+.worklog-project-tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
   color: #0b8b4f;
-  font-size: 10.5px;
+  font-size: 10px;
   line-height: 1.6;
   background: #ecfdf3;
+  border: 1px solid #b9e6cd;
   border-radius: 4px;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -506,6 +496,9 @@ onMounted(() => {
 }
 
 .log-card-project {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 4px;
   color: var(--wk-text);
   font-size: 13.5px;
@@ -514,25 +507,27 @@ onMounted(() => {
 }
 
 .log-card-project-name {
-  margin: 4px 0 0;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
   color: var(--wk-text);
   font-size: 13.5px;
   font-weight: 600;
   line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.log-card-category {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  margin-top: 5px;
-  padding: 1px 7px;
+.log-card-project-tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
   color: #0b8b4f;
-  font-size: 10.5px;
+  font-size: 10px;
+  font-weight: 400;
   line-height: 1.6;
   background: #ecfdf3;
+  border: 1px solid #b9e6cd;
   border-radius: 4px;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

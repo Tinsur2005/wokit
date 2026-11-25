@@ -83,6 +83,7 @@ const projectBound = ref(false)
 const submitting = ref(false)
 const form = ref({
   taskContent: '',
+  resolvedProblem: '',
   taskResult: '',
   problem: '',
   output: '',
@@ -97,8 +98,9 @@ const rules = {
     { required: true, message: '请填写任务内容', trigger: 'blur' },
     { max: 200, message: '任务内容不能超过 200 个字', trigger: 'blur' }
   ],
+  resolvedProblem: [{ max: 500, message: '已解决问题及解决方式不能超过 500 个字', trigger: 'blur' }],
   taskResult: [{ max: 500, message: '结果不能超过 500 个字', trigger: 'blur' }],
-  problem: [{ max: 500, message: '存在的问题不能超过 500 个字', trigger: 'blur' }],
+  problem: [{ max: 500, message: '仍存在的问题不能超过 500 个字', trigger: 'blur' }],
   output: [{ max: 500, message: '产出不能超过 500 个字', trigger: 'blur' }],
   extra: [{ max: 500, message: '其他补充不能超过 500 个字', trigger: 'blur' }]
 }
@@ -139,7 +141,7 @@ const openCreate = () => {
   dialogMode.value = 'create'
   editingId.value = null
   projectBound.value = false
-  form.value = { taskContent: '', taskResult: '', problem: '', output: '', extra: '', projectId: null }
+  form.value = { taskContent: '', resolvedProblem: '', taskResult: '', problem: '', output: '', extra: '', projectId: null }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
 }
@@ -150,6 +152,7 @@ const openEdit = (row) => {
   projectBound.value = Boolean(row.projectId)
   form.value = {
     taskContent: row.taskContent,
+    resolvedProblem: row.resolvedProblem || '',
     taskResult: row.taskResult || '',
     problem: row.problem || '',
     output: row.output || '',
@@ -197,7 +200,7 @@ const removeRow = async (row) => {
   }
 }
 
-const hasDetail = (row) => Boolean(row.taskResult || row.problem || row.output || row.extra)
+const hasDetail = (row) => Boolean(row.taskResult || row.resolvedProblem || row.problem || row.output || row.extra)
 
 const buildReportText = () => {
   const now = new Date()
@@ -217,7 +220,8 @@ const buildReportText = () => {
     }
     appendField('项目', projectStore.projectName(row.projectId))
     appendField('结果', row.taskResult)
-    appendField('存在的问题', row.problem)
+    appendField('已解决问题及解决方式', row.resolvedProblem)
+    appendField('仍存在的问题', row.problem)
     appendField('产出', row.output)
     appendField('其他', row.extra)
     lines.push('')
@@ -253,7 +257,7 @@ onMounted(() => {
     <div class="wk-page-head">
       <div>
         <h1 class="wk-page-title">周报记录</h1>
-        <p class="wk-page-desc">按周记录完成的任务、结果与遗留问题，随时导出本周明细。</p>
+        <p class="wk-page-desc">按周记录完成的任务、结果、问题与解决方式，随时导出本周明细。</p>
       </div>
       <div class="wk-page-actions weekly-head-actions">
         <div class="week-switch">
@@ -276,7 +280,7 @@ onMounted(() => {
     <div class="stat-grid weekly-stats">
       <StatCard label="本周记录" :value="stats.total" unit="条" tone="green" :icon="DocumentChecked" />
       <StatCard label="有产出" :value="stats.output" unit="条" tone="blue" :icon="Box" />
-      <StatCard label="存在问题" :value="stats.problem" unit="条" tone="amber" :icon="Warning" />
+      <StatCard label="仍存在的问题" :value="stats.problem" unit="条" tone="amber" :icon="Warning" />
     </div>
 
     <section class="wk-card">
@@ -291,7 +295,7 @@ onMounted(() => {
       </div>
 
       <el-table v-loading="loading" :data="rows" class="wk-table weekly-table" row-key="id">
-        <el-table-column label="任务内容" min-width="210">
+        <el-table-column label="任务内容" min-width="300">
           <template #default="{ row }">
             <div class="weekly-task-cell">
               <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag">
@@ -311,7 +315,15 @@ onMounted(() => {
             <span v-else class="wk-muted">未填写</span>
           </template>
         </el-table-column>
-        <el-table-column label="存在的问题" min-width="170">
+        <el-table-column label="已解决问题及解决方式" min-width="210">
+          <template #default="{ row }">
+            <el-tooltip v-if="row.resolvedProblem" :content="row.resolvedProblem" placement="top-start" :show-after="200" popper-class="wk-cell-tooltip">
+              <span class="cell-ellipsis resolved-text">{{ row.resolvedProblem }}</span>
+            </el-tooltip>
+            <span v-else class="wk-muted">未填写</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="仍存在的问题" min-width="170">
           <template #default="{ row }">
             <el-tooltip v-if="row.problem" :content="row.problem" placement="top-start" :show-after="200" popper-class="wk-cell-tooltip">
               <span class="cell-ellipsis problem-text">{{ row.problem }}</span>
@@ -352,22 +364,26 @@ onMounted(() => {
       <div class="weekly-cards">
         <article v-for="row in rows" :key="row.id" class="weekly-card">
           <div class="weekly-card-head">
+            <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag weekly-project-mobile">
+              {{ projectStore.projectName(row.projectId) }}
+            </span>
             <h3 class="weekly-task">{{ row.taskContent }}</h3>
             <div v-if="hasBtnPermission('weekly:edit') || hasBtnPermission('weekly:delete')" class="table-actions">
               <el-button v-if="hasBtnPermission('weekly:edit')" link type="primary" :icon="Edit" aria-label="编辑" @click="openEdit(row)" />
               <el-button v-if="hasBtnPermission('weekly:delete')" link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
             </div>
           </div>
-          <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag weekly-project-mobile">
-            {{ projectStore.projectName(row.projectId) }}
-          </span>
           <div class="weekly-fields">
             <div v-if="row.taskResult" class="weekly-field">
               <span class="field-label">结果</span>
               <p class="field-value">{{ row.taskResult }}</p>
             </div>
+            <div v-if="row.resolvedProblem" class="weekly-field">
+              <span class="field-label">已解决问题及解决方式</span>
+              <p class="field-value is-resolved">{{ row.resolvedProblem }}</p>
+            </div>
             <div v-if="row.problem" class="weekly-field">
-              <span class="field-label">存在的问题</span>
+              <span class="field-label">仍存在的问题</span>
               <p class="field-value is-problem">{{ row.problem }}</p>
             </div>
             <div v-if="row.output" class="weekly-field">
@@ -415,6 +431,18 @@ onMounted(() => {
           />
         </el-form-item>
 
+        <el-form-item label="已解决问题及解决方式" prop="resolvedProblem">
+          <el-input
+            v-model="form.resolvedProblem"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            resize="vertical"
+            placeholder="本周解决了哪些问题，分别采用了什么方式（选填）"
+          />
+        </el-form-item>
+
         <div class="form-grid">
           <el-form-item label="结果" prop="taskResult">
             <el-input
@@ -427,7 +455,7 @@ onMounted(() => {
               placeholder="完成情况或结论（选填）"
             />
           </el-form-item>
-          <el-form-item label="存在的问题" prop="problem">
+          <el-form-item label="仍存在的问题" prop="problem">
             <el-input
               v-model="form.problem"
               type="textarea"
@@ -559,23 +587,29 @@ onMounted(() => {
   color: #b54708;
 }
 
+.resolved-text {
+  color: #0b8b4f;
+}
+
 .weekly-task-cell {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
 .weekly-task-cell :deep(.el-tooltip__trigger) {
   display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
 }
 
 .weekly-project-tag {
   display: inline-block;
-  max-width: 100%;
+  flex: 0 0 auto;
+  max-width: 110px;
   overflow: hidden;
   padding: 1px 7px;
   color: #0b8b4f;
@@ -589,7 +623,8 @@ onMounted(() => {
 }
 
 .weekly-project-mobile {
-  margin-top: 4px;
+  max-width: 96px;
+  margin-top: 0;
 }
 
 .weekly-table :deep(td.el-table__cell) {
@@ -661,6 +696,10 @@ onMounted(() => {
 
 .field-value.is-problem {
   color: #b54708;
+}
+
+.field-value.is-resolved {
+  color: #0b8b4f;
 }
 
 .no-detail {
