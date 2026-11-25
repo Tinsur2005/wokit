@@ -11,7 +11,7 @@ public class TaskQuery {
     private String keyword;
 
     /**
-     * 任务状态（0：待完成，1：已完成）
+     * 任务状态（0：待处理，1：进行中，2：阻塞中，3：已完成）
      */
     private Integer status;
 

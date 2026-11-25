@@ -109,7 +109,7 @@ public class TaskController {
 
     /**
      * 切换任务状态
-     * PUT /admin/tasks/status/1?status=1
+     * PUT /admin/tasks/status/1?status=3
      */
     @PutMapping("/status/{id}")
     public Result changeStatus(@PathVariable Long id,

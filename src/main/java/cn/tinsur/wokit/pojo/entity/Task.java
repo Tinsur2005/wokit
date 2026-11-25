@@ -60,7 +60,12 @@ public class Task implements Serializable {
     private Date deadline;
 
     /**
-     * 任务状态（0：待完成，1：已完成）
+     * 优先级（0：紧急，1：重要，2：普通，3：低优先级）
+     */
+    private Integer priority;
+
+    /**
+     * 任务状态（0：待处理，1：进行中，2：阻塞中，3：已完成）
      */
     private Integer status;
 

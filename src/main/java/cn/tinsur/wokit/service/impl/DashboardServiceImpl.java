@@ -47,6 +47,7 @@ public class DashboardServiceImpl implements IDashboardService {
     private static final DateTimeFormatter SHORT_FORMATTER = DateTimeFormatter.ofPattern("MM-dd");
     private static final String MODE_COUNTDOWN_DAY = "countdown_day";
     private static final String MODE_PRECISE = "precise";
+    private static final int TASK_STATUS_DONE = 3;
 
     @Autowired
     private TaskMapper taskMapper;
@@ -74,8 +75,8 @@ public class DashboardServiceImpl implements IDashboardService {
         LocalDate nextMonthStart = monthStart.plusMonths(1);
 
         DashboardVO dashboardVO = new DashboardVO();
-        dashboardVO.setTodayTotal(countTask(userId, null, todayStart, tomorrow));
-        dashboardVO.setTodayPending(countTask(userId, 0, todayStart, tomorrow));
+        dashboardVO.setTodayTotal(countTask(userId, todayStart, tomorrow));
+        dashboardVO.setTodayPending(countPendingTask(userId, todayStart, tomorrow));
         dashboardVO.setWeekCompleted(countCompletedTask(userId, weekStart, nextWeekStart));
         dashboardVO.setMonthHours(sumMonthHours(userId, monthStart, nextMonthStart));
         dashboardVO.setRunningTimers(countRunningTimers(userId, today));
@@ -88,15 +89,23 @@ public class DashboardServiceImpl implements IDashboardService {
     /**
      * 统计某日期区间内时间覆盖的任务数
      */
-    private Integer countTask(Long userId, Integer status, LocalDate start, LocalDate end) {
+    private Integer countTask(Long userId, LocalDate start, LocalDate end) {
         LambdaQueryWrapper<Task> wrapper = new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
                 .ge(Task::getDeadline, startOfDay(start))
                 .lt(Task::getStartTime, startOfDay(end));
-        if (status != null) {
-            wrapper.eq(Task::getStatus, status);
-        }
         return taskMapper.selectCount(wrapper).intValue();
+    }
+
+    /**
+     * 统计某日期区间内未完成的任务数
+     */
+    private Integer countPendingTask(Long userId, LocalDate start, LocalDate end) {
+        return taskMapper.selectCount(new LambdaQueryWrapper<Task>()
+                .eq(Task::getUserId, userId)
+                .ne(Task::getStatus, TASK_STATUS_DONE)
+                .ge(Task::getDeadline, startOfDay(start))
+                .lt(Task::getStartTime, startOfDay(end))).intValue();
     }
 
     /**
@@ -105,7 +114,7 @@ public class DashboardServiceImpl implements IDashboardService {
     private Integer countCompletedTask(Long userId, LocalDate start, LocalDate end) {
         return taskMapper.selectCount(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
-                .eq(Task::getStatus, 1)
+                .eq(Task::getStatus, TASK_STATUS_DONE)
                 .ge(Task::getUpdateTime, startOfDay(start))
                 .lt(Task::getUpdateTime, startOfDay(end))).intValue();
     }
@@ -158,7 +167,7 @@ public class DashboardServiceImpl implements IDashboardService {
                 .lt(Task::getCreateTime, startOfDay(end)));
         List<Task> completedTasks = taskMapper.selectList(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
-                .eq(Task::getStatus, 1)
+                .eq(Task::getStatus, TASK_STATUS_DONE)
                 .ge(Task::getUpdateTime, startOfDay(start))
                 .lt(Task::getUpdateTime, startOfDay(end)));
 

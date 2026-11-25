@@ -11,7 +11,7 @@ import lombok.Data;
 public class TaskStatVO {
 
     /**
-     * 今日待办数量
+     * 今日未完成数量
      */
     private Integer todayPending;
 

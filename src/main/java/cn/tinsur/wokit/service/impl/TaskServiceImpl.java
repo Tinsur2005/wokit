@@ -40,6 +40,10 @@ import java.util.Map;
 @Service
 public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements ITaskService {
 
+    private static final int STATUS_PENDING = 0;
+    private static final int STATUS_DONE = 3;
+    private static final int PRIORITY_NORMAL = 2;
+
     @Autowired
     private ProjectMapper projectMapper;
 
@@ -65,8 +69,10 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
             LocalDate day = parseDate(taskQuery.getDate());
             filterActiveOnDay(lambdaQueryWrapper, day);
         }
-        // 待完成排在前面，再按截止时间升序
-        lambdaQueryWrapper.orderByAsc(Task::getStatus).orderByAsc(Task::getDeadline);
+        // 未完成排在前面，再按优先级和截止时间排序
+        lambdaQueryWrapper.orderByAsc(Task::getStatus)
+                .orderByAsc(Task::getPriority)
+                .orderByAsc(Task::getDeadline);
         return page(new Page<>(pageNum, pageSize), lambdaQueryWrapper);
     }
 
@@ -80,6 +86,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         lambdaQueryWrapper.eq(Task::getUserId, userId);
         filterActiveOnDay(lambdaQueryWrapper, day);
         lambdaQueryWrapper.orderByAsc(Task::getStatus)
+                .orderByAsc(Task::getPriority)
                 .orderByAsc(Task::getDeadline);
         return list(lambdaQueryWrapper);
     }
@@ -125,7 +132,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
             for (LocalDate day = start; !day.isAfter(end); day = day.plusDays(1)) {
                 int[] stats = dailyStats.computeIfAbsent(day, key -> new int[2]);
                 stats[0]++;
-                if (task.getStatus() != null && task.getStatus() == 0) {
+                if (task.getStatus() != null && task.getStatus() != STATUS_DONE) {
                     stats[1]++;
                 }
             }
@@ -165,14 +172,14 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
 
         LambdaQueryWrapper<Task> todayPendingWrapper = new LambdaQueryWrapper<>();
         todayPendingWrapper.eq(Task::getUserId, userId)
-                .eq(Task::getStatus, 0);
+                .ne(Task::getStatus, STATUS_DONE);
         filterActiveOnDay(todayPendingWrapper, today);
         vo.setTodayPending(Math.toIntExact(count(todayPendingWrapper)));
 
         // 本周完成数量：按更新时间统计，状态切换为已完成时刷新
         LambdaQueryWrapper<Task> weekWrapper = new LambdaQueryWrapper<>();
         weekWrapper.eq(Task::getUserId, userId)
-                .eq(Task::getStatus, 1)
+                .eq(Task::getStatus, STATUS_DONE)
                 .ge(Task::getUpdateTime, startOfDay(weekStart))
                 .lt(Task::getUpdateTime, startOfDay(nextWeekStart));
         vo.setWeekCompleted(Math.toIntExact(count(weekWrapper)));
@@ -186,7 +193,7 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
 
         LambdaQueryWrapper<Task> monthCompletedWrapper = new LambdaQueryWrapper<>();
         monthCompletedWrapper.eq(Task::getUserId, userId)
-                .eq(Task::getStatus, 1)
+                .eq(Task::getStatus, STATUS_DONE)
                 .ge(Task::getDeadline, startOfDay(monthStart))
                 .lt(Task::getStartTime, startOfDay(nextMonthStart));
         vo.setMonthCompleted(Math.toIntExact(count(monthCompletedWrapper)));
@@ -203,7 +210,12 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         validateProject(task.getProjectId(), userId);
         task.setId(null);
         task.setUserId(userId);
-        task.setStatus(0);
+        if (task.getPriority() == null) {
+            task.setPriority(PRIORITY_NORMAL);
+        }
+        if (task.getStatus() == null) {
+            task.setStatus(STATUS_PENDING);
+        }
         save(task);
         return Result.ok("任务创建成功");
     }
@@ -220,8 +232,13 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         validateProject(task.getProjectId(), userId);
         task.setId(dbTask.getId());
         task.setUserId(userId);
-        // 状态不允许通过编辑接口修改，走单独的状态切换接口
-        task.setStatus(null);
+        // 未传优先级或状态时保留原值
+        if (task.getPriority() == null) {
+            task.setPriority(dbTask.getPriority());
+        }
+        if (task.getStatus() == null) {
+            task.setStatus(dbTask.getStatus());
+        }
         updateById(task);
         return Result.ok("任务修改成功");
     }
@@ -232,14 +249,19 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     @Override
     public Result changeStatus(Long id, Integer status, Long userId) {
         Task dbTask = getOwnTask(id, userId);
-        if (status == null || (status != 0 && status != 1)) {
+        if (status == null || status < STATUS_PENDING || status > STATUS_DONE) {
             throw new ServiceException("任务状态值不正确");
         }
         Task updateTask = new Task();
         updateTask.setId(dbTask.getId());
         updateTask.setStatus(status);
         updateById(updateTask);
-        return Result.ok(status == 1 ? "任务已完成" : "任务已恢复为待完成");
+        return Result.ok(switch (status) {
+            case 0 -> "任务已恢复为待处理";
+            case 1 -> "任务已进入进行中";
+            case 2 -> "任务已标记为阻塞中";
+            default -> "任务已完成";
+        });
     }
 
     /**
@@ -283,6 +305,12 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         }
         if (!ObjectUtils.isEmpty(task.getDescription()) && task.getDescription().length() > 500) {
             throw new ServiceException("任务描述不能超过500个字");
+        }
+        if (task.getPriority() != null && (task.getPriority() < 0 || task.getPriority() > 3)) {
+            throw new ServiceException("任务优先级值不正确");
+        }
+        if (task.getStatus() != null && (task.getStatus() < STATUS_PENDING || task.getStatus() > STATUS_DONE)) {
+            throw new ServiceException("任务状态值不正确");
         }
         task.setTitle(task.getTitle().trim());
     }

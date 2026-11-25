@@ -52,12 +52,33 @@ const submitting = ref(false)
 const form = ref({
   title: '',
   description: '',
+  priority: 2,
+  status: 0,
   startTime: '',
   deadline: '',
   projectId: null
 })
 
 const projectStore = useProjectStore()
+
+const priorityOptions = [
+  { value: 0, label: '紧急', tone: 'urgent' },
+  { value: 1, label: '重要', tone: 'important' },
+  { value: 2, label: '普通', tone: 'normal' },
+  { value: 3, label: '低优先级', tone: 'low' }
+]
+
+const statusOptions = [
+  { value: 0, label: '待处理', tagType: 'info' },
+  { value: 1, label: '进行中', tagType: 'primary' },
+  { value: 2, label: '阻塞中', tagType: 'warning' },
+  { value: 3, label: '已完成', tagType: 'success' }
+]
+
+const priorityMap = Object.fromEntries(priorityOptions.map((item) => [item.value, item]))
+const statusMap = Object.fromEntries(statusOptions.map((item) => [item.value, item]))
+const getPriority = (value) => priorityMap[value] || priorityMap[2]
+const getStatus = (value) => statusMap[value] || statusMap[0]
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -97,7 +118,10 @@ const selectedDayLabel = computed(() => {
 
 const selectedWeekday = computed(() => `周${'日一二三四五六'[parseDate(selectedDate.value).getDay()]}`)
 
-const pendingCount = computed(() => tasks.value.filter((task) => task.status === 0).length)
+const isDone = (task) => task.status === 3
+const isDueToday = (task) => Boolean(task.deadline && task.deadline.slice(0, 10) === todayStr)
+
+const pendingCount = computed(() => tasks.value.filter((task) => !isDone(task)).length)
 
 const completionRate = computed(() => {
   if (!stat.value.monthTotal) return 0
@@ -109,6 +133,8 @@ const rules = {
     { required: true, message: '请填写任务标题', trigger: 'blur' },
     { max: 100, message: '标题不能超过 100 个字', trigger: 'blur' }
   ],
+  priority: [{ required: true, message: '请选择优先级', trigger: 'change' }],
+  status: [{ required: true, message: '请选择任务状态', trigger: 'change' }],
   startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
   deadline: [
     { required: true, message: '请选择截止时间', trigger: 'change' },
@@ -196,6 +222,8 @@ const openCreate = () => {  dialogMode.value = 'create'
   form.value = {
     title: '',
     description: '',
+    priority: 2,
+    status: 0,
     startTime: `${selectedDate.value} 09:00:00`,
     deadline: `${selectedDate.value} 18:00:00`,
     projectId: null
@@ -211,6 +239,8 @@ const openEdit = (task) => {
   form.value = {
     title: task.title,
     description: task.description || '',
+    priority: task.priority ?? 2,
+    status: task.status ?? 0,
     startTime: task.startTime,
     deadline: task.deadline,
     projectId: task.projectId || null
@@ -228,6 +258,8 @@ const submitTask = async () => {
     const payload = {
       title: form.value.title,
       description: form.value.description,
+      priority: form.value.priority,
+      status: form.value.status,
       startTime: form.value.startTime,
       deadline: form.value.deadline,
       projectId: form.value.projectId || null
@@ -251,7 +283,7 @@ const submitTask = async () => {
 }
 
 const toggleTask = async (task) => {
-  const nextStatus = task.status === 1 ? 0 : 1
+  const nextStatus = isDone(task) ? 0 : 3
   const result = await taskApi.changeStatus(task.id, nextStatus)
   if (result.code === 1) {
     ElMessage.success(result.msg)
@@ -285,7 +317,7 @@ const timeRange = (task) => {
 }
 
 const isOverdue = (task) => {
-  if (task.status !== 0 || !task.deadline) return false
+  if (isDone(task) || !task.deadline) return false
   return new Date(task.deadline.replace(/-/g, '/')).getTime() < Date.now()
 }
 
@@ -398,7 +430,7 @@ onMounted(() => {
                 class="wk-badge"
                 :class="{ 'is-muted': pendingCount === 0 }"
               >
-                {{ pendingCount > 0 ? `${pendingCount} 项待办` : '已全部完成' }}
+                {{ pendingCount > 0 ? `${pendingCount} 项未完成` : '已全部完成' }}
               </span>
             </div>
             <p class="day-sub">当日任务 · 共 {{ tasks.length }} 项</p>
@@ -416,22 +448,26 @@ onMounted(() => {
               v-for="task in tasks"
               :key="task.id"
               class="task-row"
-              :class="{ 'is-done': task.status === 1 }"
+              :class="[isDone(task) ? 'is-done' : '', 'priority-' + getPriority(task.priority).tone]"
             >
               <button
                 class="task-check"
-                :class="{ checked: task.status === 1 }"
+                :class="{ checked: isDone(task) }"
                 type="button"
-                :aria-label="task.status === 1 ? '标记为待完成' : '标记为已完成'"
+                :aria-label="isDone(task) ? '标记为待处理' : '标记为已完成'"
                 :disabled="!hasBtnPermission('task:toggle')"
                 @click="toggleTask(task)"
               >
-                <el-icon v-if="task.status === 1" :size="13"><Check /></el-icon>
+                <el-icon v-if="isDone(task)" :size="13"><Check /></el-icon>
               </button>
 
               <div class="task-body">
                 <div class="task-title-line">
+                  <span class="task-priority" :class="'is-' + getPriority(task.priority).tone">
+                    {{ getPriority(task.priority).label }}
+                  </span>
                   <p class="task-title">{{ task.title }}</p>
+                  <span v-if="isDueToday(task)" class="due-today">今日截止</span>
                   <span v-if="isOverdue(task)" class="overdue">已逾期</span>
                 </div>
                 <p v-if="task.description" class="task-desc">{{ task.description }}</p>
@@ -442,9 +478,14 @@ onMounted(() => {
                   <span v-if="projectStore.projectName(task.projectId)" class="meta-sep">·</span>
                   <span class="time">{{ timeRange(task) }}</span>
                   <span class="meta-sep">·</span>
-                  <span :class="task.status === 1 ? 'state-done' : 'state-pending'">
-                    {{ task.status === 1 ? '已完成' : '待完成' }}
-                  </span>
+                  <el-tag
+                    size="small"
+                    effect="plain"
+                    :type="getStatus(task.status).tagType"
+                    class="task-status-tag"
+                  >
+                    {{ getStatus(task.status).label }}
+                  </el-tag>
                 </div>
               </div>
 
@@ -503,6 +544,28 @@ onMounted(() => {
           v-model="form.projectId"
           v-model:bound="projectBound"
         />
+        <div class="task-attr-grid">
+          <el-form-item label="优先级" prop="priority">
+            <el-select v-model="form.priority" placeholder="选择优先级" style="width: 100%">
+              <el-option
+                v-for="item in priorityOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="状态" prop="status">
+            <el-select v-model="form.status" placeholder="选择任务状态" style="width: 100%">
+              <el-option
+                v-for="item in statusOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
         <div class="time-grid">
           <el-form-item label="开始时间" prop="startTime">
             <el-date-picker
@@ -782,6 +845,23 @@ onMounted(() => {
   gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid var(--wk-line-soft);
+  border-left: 3px solid transparent;
+}
+
+.task-row.priority-urgent {
+  border-left-color: #f04438;
+}
+
+.task-row.priority-important {
+  border-left-color: #f79009;
+}
+
+.task-row.priority-normal {
+  border-left-color: #84caff;
+}
+
+.task-row.priority-low {
+  border-left-color: #d0d5dd;
 }
 
 .task-row:last-child {
@@ -835,6 +915,50 @@ onMounted(() => {
   font-weight: 500;
   line-height: 1.5;
   word-break: break-word;
+}
+
+.task-priority {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.task-priority.is-urgent {
+  color: #b42318;
+  background: #fef3f2;
+  border-color: #fecdca;
+}
+
+.task-priority.is-important {
+  color: #b54708;
+  background: #fffaeb;
+  border-color: #fedf89;
+}
+
+.task-priority.is-normal {
+  color: #175cd3;
+  background: #eff8ff;
+  border-color: #b2ddff;
+}
+
+.task-priority.is-low {
+  color: #667085;
+  background: #f2f4f7;
+  border-color: #e4e7ec;
+}
+
+.due-today {
+  padding: 0 6px;
+  color: #b54708;
+  font-size: 10.5px;
+  line-height: 18px;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 4px;
 }
 
 .task-row.is-done .task-title {
@@ -895,12 +1019,10 @@ onMounted(() => {
   color: #d0d5dd;
 }
 
-.state-pending {
-  color: #0b8b4f;
-}
-
-.state-done {
-  color: #98a2b3;
+.task-status-tag {
+  flex-shrink: 0;
+  height: 20px;
+  padding: 0 6px;
 }
 
 .task-ops {
@@ -941,6 +1063,12 @@ onMounted(() => {
 }
 
 .time-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.task-attr-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
@@ -999,6 +1127,11 @@ onMounted(() => {
   }
 
   .time-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .task-attr-grid {
     grid-template-columns: 1fr;
     gap: 0;
   }

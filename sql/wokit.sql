@@ -70,9 +70,10 @@ CREATE TABLE `work_task` (
     `user_id`     BIGINT       NOT NULL COMMENT '所属用户ID',
     `title`       VARCHAR(100) NOT NULL COMMENT '任务标题',
     `description` VARCHAR(500) DEFAULT NULL COMMENT '任务描述',
+    `priority`    TINYINT      NOT NULL DEFAULT 2 COMMENT '优先级（0：紧急，1：重要，2：普通，3：低优先级）',
     `start_time`  DATETIME     NOT NULL COMMENT '开始时间',
     `deadline`    DATETIME     NOT NULL COMMENT '截止时间',
-    `status`      TINYINT      NOT NULL DEFAULT 0 COMMENT '任务状态（0：待完成，1：已完成）',
+    `status`      TINYINT      NOT NULL DEFAULT 0 COMMENT '任务状态（0：待处理，1：进行中，2：阻塞中，3：已完成）',
     `project_id`  BIGINT       DEFAULT NULL COMMENT '绑定项目ID',
     `create_time` DATETIME     DEFAULT NULL COMMENT '创建时间',
     `update_time` DATETIME     DEFAULT NULL COMMENT '更新时间',
@@ -169,23 +170,23 @@ VALUES
 -- ============================================================
 -- 10. 任务演示数据（以执行脚本当天为基准，避免日期过期）
 -- ============================================================
-INSERT INTO `work_task` (`user_id`, `title`, `description`, `start_time`, `deadline`, `status`, `create_time`, `update_time`)
+INSERT INTO `work_task` (`user_id`, `title`, `description`, `priority`, `start_time`, `deadline`, `status`, `create_time`, `update_time`)
 VALUES
-(1, 'Wokit 每日任务模块联调', '走通日历标记、当日任务列表、新建与状态切换的完整链路。',
+(1, 'Wokit 每日任务模块联调', '走通日历标记、当日任务列表、新建与状态切换的完整链路。', 1,
  TIMESTAMP(CURDATE(), '09:30:00'), TIMESTAMP(CURDATE(), '11:00:00'), 0, NOW(), NOW()),
-(1, '用户管理权限校验', '确认普通用户无法进入用户管理，停用账号无法登录。',
+(1, '用户管理权限校验', '确认普通用户无法进入用户管理，停用账号无法登录。', 0,
  TIMESTAMP(CURDATE(), '14:00:00'), TIMESTAMP(CURDATE(), '16:30:00'), 0, NOW(), NOW()),
-(1, '整理后端接口注释', '补齐任务、备忘录、工时登记模块的接口说明。',
- TIMESTAMP(CURDATE(), '19:30:00'), TIMESTAMP(CURDATE(), '21:00:00'), 1, NOW(), NOW()),
-(1, '输出本周工作周报', '汇总本周任务完成情况与工时分布。',
+(1, '整理后端接口注释', '补齐任务、备忘录、工时登记模块的接口说明。', 2,
+ TIMESTAMP(CURDATE(), '19:30:00'), TIMESTAMP(CURDATE(), '21:00:00'), 3, NOW(), NOW()),
+(1, '输出本周工作周报', '汇总本周任务完成情况与工时分布。', 1,
  TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '10:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '12:00:00'), 0, NOW(), NOW()),
-(1, '登录页视觉走查', '核对输入框、按钮、错误提示在 1440 与 390 宽度下的表现。',
- TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '15:00:00'), TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '17:00:00'), 1, NOW(), NOW()),
-(1, '梳理一期功能清单', '确认一期只做登录、用户管理、每日任务，其余工具预留入口。',
- TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 6 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 6 DAY), '10:00:00'), 1, NOW(), NOW()),
-(1, '移动端自适应验收', '检查侧边栏收起、底部导航、日历与任务列表的纵向排列。',
+(1, '登录页视觉走查', '核对输入框、按钮、错误提示在 1440 与 390 宽度下的表现。', 3,
+ TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '15:00:00'), TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '17:00:00'), 3, NOW(), NOW()),
+(1, '梳理一期功能清单', '确认一期只做登录、用户管理、每日任务，其余工具预留入口。', 0,
+ TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 6 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 6 DAY), '10:00:00'), 3, NOW(), NOW()),
+(1, '移动端自适应验收', '检查侧边栏收起、底部导航、日历与任务列表的纵向排列。', 2,
  TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 3 DAY), '09:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 3 DAY), '18:00:00'), 0, NOW(), NOW()),
-(1, '12 月迭代规划', '排定备忘录与工时登记的二期需求。',
+(1, '12 月迭代规划', '排定备忘录与工时登记的二期需求。', 3,
  TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 7 DAY), '14:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 7 DAY), '16:00:00'), 0, NOW(), NOW());
 
 -- ============================================================
