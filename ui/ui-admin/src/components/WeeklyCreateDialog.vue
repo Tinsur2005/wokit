@@ -6,6 +6,7 @@ import ProjectPicker from '@/components/ProjectPicker.vue'
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   weekStart: { type: String, default: '' },
+  initialTaskTitle: { type: String, default: '' },
   initialTaskContent: { type: String, default: '' },
   initialProjectId: { type: [Number, String], default: null },
   loading: { type: Boolean, default: false }
@@ -55,6 +56,7 @@ const formRef = ref()
 const projectPickerRef = ref()
 const projectBound = ref(false)
 const form = ref({
+  taskTitle: '',
   taskContent: '',
   resolvedProblem: '',
   taskResult: '',
@@ -65,10 +67,11 @@ const form = ref({
 })
 
 const rules = {
-  taskContent: [
-    { required: true, message: '请填写任务内容', trigger: 'blur' },
-    { max: 200, message: '任务内容不能超过 200 个字', trigger: 'blur' }
+  taskTitle: [
+    { required: true, message: '请填写任务标题', trigger: 'blur' },
+    { max: 100, message: '任务标题不能超过 100 个字', trigger: 'blur' }
   ],
+  taskContent: [{ max: 500, message: '任务内容不能超过 500 个字', trigger: 'blur' }],
   resolvedProblem: [{ max: 500, message: '已解决问题及解决方式不能超过 500 个字', trigger: 'blur' }],
   taskResult: [{ max: 500, message: '结果不能超过 500 个字', trigger: 'blur' }],
   problem: [{ max: 500, message: '仍存在的问题不能超过 500 个字', trigger: 'blur' }],
@@ -79,7 +82,8 @@ const rules = {
 const resetForm = () => {
   projectBound.value = Boolean(props.initialProjectId)
   form.value = {
-    taskContent: (props.initialTaskContent || '').slice(0, 200),
+    taskTitle: (props.initialTaskTitle || '').slice(0, 100),
+    taskContent: (props.initialTaskContent || '').slice(0, 500),
     resolvedProblem: '',
     taskResult: '',
     problem: '',
@@ -128,15 +132,24 @@ watch(
     />
 
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top" hide-required-asterisk>
+      <el-form-item label="任务标题" prop="taskTitle">
+        <el-input
+          v-model="form.taskTitle"
+          maxlength="100"
+          show-word-limit
+          placeholder="本周完成的任务标题"
+        />
+      </el-form-item>
+
       <el-form-item label="任务内容" prop="taskContent">
         <el-input
           v-model="form.taskContent"
           type="textarea"
           :rows="2"
-          maxlength="200"
+          maxlength="500"
           show-word-limit
           resize="vertical"
-          placeholder="本周完成了什么任务"
+          placeholder="本周完成了什么任务（选填）"
         />
       </el-form-item>
 

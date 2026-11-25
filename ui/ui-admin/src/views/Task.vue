@@ -62,6 +62,7 @@ const weeklySubmitting = ref(false)
 const pendingCompleteTask = ref(null)
 const weeklySeed = ref({
   weekStart: '',
+  taskTitle: '',
   taskContent: '',
   projectId: null
 })
@@ -318,15 +319,6 @@ const updateTaskStatus = async (task, status) => {
   await applyTaskStatus(task, status)
 }
 
-const buildWeeklyTaskContent = (task) => {
-  const title = (task.title || '').trim()
-  const description = (task.description || '').trim()
-  if (!description) return title.slice(0, 200)
-  const prefix = `${title}-`
-  const available = Math.max(0, 200 - prefix.length)
-  return `${prefix}${description.slice(0, available)}`
-}
-
 const promptWeeklySync = async (task) => {
   try {
     await ElMessageBox.confirm(
@@ -344,7 +336,8 @@ const promptWeeklySync = async (task) => {
   pendingCompleteTask.value = task
   weeklySeed.value = {
     weekStart: weekStartOf(todayStr),
-    taskContent: buildWeeklyTaskContent(task),
+    taskTitle: (task.title || '').slice(0, 100),
+    taskContent: (task.description || '').slice(0, 500),
     projectId: task.projectId || null
   }
   weeklyDialogVisible.value = true
@@ -758,6 +751,7 @@ onMounted(() => {
     <WeeklyCreateDialog
       v-model="weeklyDialogVisible"
       :week-start="weeklySeed.weekStart"
+      :initial-task-title="weeklySeed.taskTitle"
       :initial-task-content="weeklySeed.taskContent"
       :initial-project-id="weeklySeed.projectId"
       :loading="weeklySubmitting"

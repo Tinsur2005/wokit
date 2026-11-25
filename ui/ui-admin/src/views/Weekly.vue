@@ -82,6 +82,7 @@ const projectPickerRef = ref()
 const projectBound = ref(false)
 const submitting = ref(false)
 const form = ref({
+  taskTitle: '',
   taskContent: '',
   resolvedProblem: '',
   taskResult: '',
@@ -94,10 +95,11 @@ const form = ref({
 const projectStore = useProjectStore()
 
 const rules = {
-  taskContent: [
-    { required: true, message: '请填写任务内容', trigger: 'blur' },
-    { max: 200, message: '任务内容不能超过 200 个字', trigger: 'blur' }
+  taskTitle: [
+    { required: true, message: '请填写任务标题', trigger: 'blur' },
+    { max: 100, message: '任务标题不能超过 100 个字', trigger: 'blur' }
   ],
+  taskContent: [{ max: 500, message: '任务内容不能超过 500 个字', trigger: 'blur' }],
   resolvedProblem: [{ max: 500, message: '已解决问题及解决方式不能超过 500 个字', trigger: 'blur' }],
   taskResult: [{ max: 500, message: '结果不能超过 500 个字', trigger: 'blur' }],
   problem: [{ max: 500, message: '仍存在的问题不能超过 500 个字', trigger: 'blur' }],
@@ -141,7 +143,7 @@ const openCreate = () => {
   dialogMode.value = 'create'
   editingId.value = null
   projectBound.value = false
-  form.value = { taskContent: '', resolvedProblem: '', taskResult: '', problem: '', output: '', extra: '', projectId: null }
+  form.value = { taskTitle: '', taskContent: '', resolvedProblem: '', taskResult: '', problem: '', output: '', extra: '', projectId: null }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
 }
@@ -151,6 +153,7 @@ const openEdit = (row) => {
   editingId.value = row.id
   projectBound.value = Boolean(row.projectId)
   form.value = {
+    taskTitle: row.taskTitle || '',
     taskContent: row.taskContent,
     resolvedProblem: row.resolvedProblem || '',
     taskResult: row.taskResult || '',
@@ -186,8 +189,9 @@ const submitForm = async () => {
 }
 
 const removeRow = async (row) => {
+  const label = (row.taskTitle || '').trim() || row.taskContent
   await ElMessageBox.confirm(
-    `确定删除「${row.taskContent}」这条周报记录吗？`,
+    `确定删除「${label}」这条周报记录吗？`,
     '删除周报记录',
     { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
   )
@@ -212,12 +216,14 @@ const buildReportText = () => {
     ''
   ]
   rows.value.forEach((row, index) => {
-    lines.push(`${index + 1}. ${row.taskContent}`)
+    const title = (row.taskTitle || '').trim()
+    lines.push(`${index + 1}. ${title || row.taskContent}`)
     const appendField = (label, value) => {
       if (value && value.trim()) {
         lines.push(`   ${label}：${value.trim()}`)
       }
     }
+    appendField('任务内容', title ? row.taskContent : '')
     appendField('项目', projectStore.projectName(row.projectId))
     appendField('结果', row.taskResult)
     appendField('已解决问题及解决方式', row.resolvedProblem)
@@ -295,16 +301,23 @@ onMounted(() => {
       </div>
 
       <el-table v-loading="loading" :data="rows" class="wk-table weekly-table" row-key="id">
-        <el-table-column label="任务内容" min-width="300">
+        <el-table-column label="任务标题" min-width="220">
           <template #default="{ row }">
             <div class="weekly-task-cell">
               <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag">
                 {{ projectStore.projectName(row.projectId) }}
               </span>
-              <el-tooltip :content="row.taskContent" placement="top-start" :show-after="200" popper-class="wk-cell-tooltip">
-                <span class="cell-ellipsis task-text">{{ row.taskContent }}</span>
-              </el-tooltip>
+              <span v-if="(row.taskTitle || '').trim()" class="cell-ellipsis task-text">{{ row.taskTitle }}</span>
+              <span v-else class="wk-muted">未填写</span>
             </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="任务内容" min-width="300">
+          <template #default="{ row }">
+            <el-tooltip v-if="row.taskContent" :content="row.taskContent" placement="top-start" :show-after="200" popper-class="wk-cell-tooltip">
+              <span class="cell-ellipsis">{{ row.taskContent }}</span>
+            </el-tooltip>
+            <span v-else class="wk-muted">未填写</span>
           </template>
         </el-table-column>
         <el-table-column label="结果" min-width="170">
@@ -367,13 +380,17 @@ onMounted(() => {
             <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag weekly-project-mobile">
               {{ projectStore.projectName(row.projectId) }}
             </span>
-            <h3 class="weekly-task">{{ row.taskContent }}</h3>
+            <h3 class="weekly-task">{{ (row.taskTitle || '').trim() || row.taskContent }}</h3>
             <div v-if="hasBtnPermission('weekly:edit') || hasBtnPermission('weekly:delete')" class="table-actions">
               <el-button v-if="hasBtnPermission('weekly:edit')" link type="primary" :icon="Edit" aria-label="编辑" @click="openEdit(row)" />
               <el-button v-if="hasBtnPermission('weekly:delete')" link type="danger" :icon="Delete" aria-label="删除" @click="removeRow(row)" />
             </div>
           </div>
           <div class="weekly-fields">
+            <div v-if="(row.taskTitle || '').trim() && row.taskContent" class="weekly-field">
+              <span class="field-label">任务内容</span>
+              <p class="field-value">{{ row.taskContent }}</p>
+            </div>
             <div v-if="row.taskResult" class="weekly-field">
               <span class="field-label">结果</span>
               <p class="field-value">{{ row.taskResult }}</p>
@@ -419,15 +436,24 @@ onMounted(() => {
       />
 
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" hide-required-asterisk>
+        <el-form-item label="任务标题" prop="taskTitle">
+          <el-input
+            v-model="form.taskTitle"
+            maxlength="100"
+            show-word-limit
+            placeholder="本周完成的任务标题"
+          />
+        </el-form-item>
+
         <el-form-item label="任务内容" prop="taskContent">
           <el-input
             v-model="form.taskContent"
             type="textarea"
             :rows="2"
-            maxlength="200"
+            maxlength="500"
             show-word-limit
             resize="vertical"
-            placeholder="本周完成了什么任务"
+            placeholder="本周完成了什么任务（选填）"
           />
         </el-form-item>
 

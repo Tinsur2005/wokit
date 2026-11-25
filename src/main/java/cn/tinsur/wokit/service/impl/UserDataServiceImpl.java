@@ -236,6 +236,7 @@ public class UserDataServiceImpl implements IUserDataService {
             weekly.setWeekStart(old.getWeekStart());
             weekly.setWeekEnd(old.getWeekEnd());
             weekly.setProjectId(mapId(projectIdMap, old.getProjectId()));
+            weekly.setTaskTitle(old.getTaskTitle());
             weekly.setTaskContent(old.getTaskContent());
             weekly.setTaskResult(old.getTaskResult());
             weekly.setResolvedProblem(old.getResolvedProblem());

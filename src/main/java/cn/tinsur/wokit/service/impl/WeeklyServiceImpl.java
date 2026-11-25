@@ -106,22 +106,22 @@ public class WeeklyServiceImpl extends ServiceImpl<WeeklyMapper, Weekly> impleme
     }
 
     /**
-     * 校验周报字段：任务内容必填，其余为选填
+     * 校验周报字段：任务标题必填，任务内容及其余字段为选填
      */
     private void validateWeekly(Weekly weekly) {
-        if (ObjectUtils.isEmpty(weekly.getTaskContent()) || weekly.getTaskContent().trim().isEmpty()) {
-            throw new ServiceException("请填写本周完成的任务内容");
+        if (ObjectUtils.isEmpty(weekly.getTaskTitle()) || weekly.getTaskTitle().trim().isEmpty()) {
+            throw new ServiceException("请填写任务标题");
         }
-        if (weekly.getTaskContent().length() > 200) {
-            throw new ServiceException("任务内容不能超过200个字");
-        }
+        checkLength(weekly.getTaskTitle(), 100, "任务标题不能超过100个字");
+        checkLength(weekly.getTaskContent(), 500, "任务内容不能超过500个字");
         checkLength(weekly.getTaskResult(), 500, "任务结果不能超过500个字");
         checkLength(weekly.getResolvedProblem(), 500, "已解决问题及解决方式不能超过500个字");
         checkLength(weekly.getProblem(), 500, "仍存在的问题不能超过500个字");
         checkLength(weekly.getOutput(), 500, "产出不能超过500个字");
         checkLength(weekly.getExtra(), 500, "其他补充不能超过500个字");
 
-        weekly.setTaskContent(weekly.getTaskContent().trim());
+        weekly.setTaskTitle(weekly.getTaskTitle().trim());
+        weekly.setTaskContent(ObjectUtils.isEmpty(weekly.getTaskContent()) ? "" : weekly.getTaskContent().trim());
         weekly.setTaskResult(trim(weekly.getTaskResult()));
         weekly.setResolvedProblem(trim(weekly.getResolvedProblem()));
         weekly.setProblem(trim(weekly.getProblem()));

@@ -128,7 +128,8 @@ CREATE TABLE `work_weekly` (
     `week_start`   DATE         NOT NULL COMMENT '周起始日期（周一）',
     `week_end`     DATE         NOT NULL COMMENT '周结束日期（周日）',
     `project_id`   BIGINT       DEFAULT NULL COMMENT '绑定项目ID',
-    `task_content` VARCHAR(200) NOT NULL COMMENT '任务内容',
+    `task_title`   VARCHAR(100) DEFAULT NULL COMMENT '任务标题',
+    `task_content` VARCHAR(500) NOT NULL COMMENT '任务内容',
     `task_result`  VARCHAR(500) DEFAULT NULL COMMENT '任务结果',
     `resolved_problem` VARCHAR(500) DEFAULT NULL COMMENT '已解决问题及解决方式',
     `problem`      VARCHAR(500) DEFAULT NULL COMMENT '仍存在的问题',
@@ -210,11 +211,11 @@ VALUES
 -- ============================================================
 -- 13. 周报演示数据（本周一为基准，随执行日期自动调整）
 -- ============================================================
-INSERT INTO `work_weekly` (`user_id`, `week_start`, `week_end`, `task_content`, `task_result`, `problem`, `output`, `extra`, `create_time`, `update_time`)
+INSERT INTO `work_weekly` (`user_id`, `week_start`, `week_end`, `task_title`, `task_content`, `task_result`, `problem`, `output`, `extra`, `create_time`, `update_time`)
 VALUES
 (1, DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 6 DAY),
- '完成每日任务模块前后端联调', '日历打点、当日任务列表、新建与状态切换全部跑通。', '跨月切换时任务标记刷新略慢，需确认是否数据量导致。', '任务页面、8 个任务接口、演示数据。', '下周补充批量导入任务的入口。', NOW(), NOW()),
+ '完成每日任务模块前后端联调', '完成每日任务模块前后端联调', '日历打点、当日任务列表、新建与状态切换全部跑通。', '跨月切换时任务标记刷新略慢，需确认是否数据量导致。', '任务页面、8 个任务接口、演示数据。', '下周补充批量导入任务的入口。', NOW(), NOW()),
 (1, DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 6 DAY),
- '完成登录鉴权与用户管理', '管理员可新增、编辑、启停账号，普通账号无法进入用户管理。', '被停用账号的登录提示文案还需再确认。', '登录页、用户管理页、JWT 拦截器与权限校验。', 'demo 账号保留用于权限验证。', NOW(), NOW()),
+ '完成登录鉴权与用户管理', '完成登录鉴权与用户管理', '管理员可新增、编辑、启停账号，普通账号无法进入用户管理。', '被停用账号的登录提示文案还需再确认。', '登录页、用户管理页、JWT 拦截器与权限校验。', 'demo 账号保留用于权限验证。', NOW(), NOW()),
 (1, DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), DATE_ADD(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 6 DAY),
- '完成移动端自适应与视觉统一', '390 宽度下侧栏收起、底部导航与表单弹窗均可正常使用。', '窄屏下宽表格需要横向滚动，阅读体验一般。', '7 张桌面与移动端页面截图，统一绿色主题样式。', '主色统一为 #12B76A，后续新增页面沿用变量。', NOW(), NOW());
+ '完成移动端自适应与视觉统一', '完成移动端自适应与视觉统一', '390 宽度下侧栏收起、底部导航与表单弹窗均可正常使用。', '窄屏下宽表格需要横向滚动，阅读体验一般。', '7 张桌面与移动端页面截图，统一绿色主题样式。', '主色统一为 #12B76A，后续新增页面沿用变量。', NOW(), NOW());
