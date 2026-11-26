@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, TransitionGroup } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -118,6 +118,7 @@ const taskKindFilters = [
 ]
 
 const isProjectTask = (task) => Number(task.taskKind) === 1
+const isDone = (task) => Number(task.status) === 3
 
 const availableProjects = computed(() =>
   [...projectStore.projects]
@@ -141,8 +142,10 @@ const taskKindCounts = computed(() => ({
 }))
 
 const visibleTasks = computed(() => {
-  if (taskKindFilter.value === 'all') return tasks.value
-  return tasks.value.filter((task) => Number(task.taskKind) === Number(taskKindFilter.value))
+  const filtered = taskKindFilter.value === 'all'
+    ? tasks.value
+    : tasks.value.filter((task) => Number(task.taskKind) === Number(taskKindFilter.value))
+  return [...filtered].sort((a, b) => Number(isDone(a)) - Number(isDone(b)))
 })
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
@@ -183,7 +186,6 @@ const selectedDayLabel = computed(() => {
 
 const selectedWeekday = computed(() => `周${'日一二三四五六'[parseDate(selectedDate.value).getDay()]}`)
 
-const isDone = (task) => task.status === 3
 const isDueToday = (task) => Boolean(task.deadline && task.deadline.slice(0, 10) === todayStr)
 
 const pendingCount = computed(() => tasks.value.filter((task) => !isDone(task)).length)
@@ -373,8 +375,9 @@ const submitTask = async () => {
 const applyTaskStatus = async (task, status, showMessage = true) => {
   const result = await taskApi.changeStatus(task.id, status)
   if (result.code === 1) {
+    task.status = status
     if (showMessage) ElMessage.success(result.msg)
-    await refreshAll()
+    await Promise.all([loadCalendar(), loadStat()])
     return true
   }
   ElMessage.error(result.msg)
@@ -431,7 +434,8 @@ const submitWeeklyWithCompletion = async (payload) => {
     }
     pendingCompleteTask.value = null
     weeklyDialogVisible.value = false
-    await refreshAll()
+    task.status = 3
+    await Promise.all([loadCalendar(), loadStat()])
     ElMessage.success('任务已完成，周报已添加')
   } finally {
     weeklySubmitting.value = false
@@ -627,7 +631,7 @@ onMounted(async () => {
         </div>
 
         <div class="task-list" v-loading="loadingTasks">
-          <template v-if="visibleTasks.length">
+          <TransitionGroup name="task" tag="div" class="task-list-track">
             <article
               v-for="task in visibleTasks"
               :key="task.id"
@@ -741,13 +745,14 @@ onMounted(async () => {
                 </el-tooltip>
               </div>
             </article>
-          </template>
 
-          <EmptyState
-            v-else
-            :title="taskKindFilter === 'all' ? '当日暂无任务' : `当日暂无${taskKindFilter === 0 ? '普通' : '项目'}任务`"
-            hint="点击右上角的加号，安排这一天的第一件事。"
-          />
+            <EmptyState
+              v-if="!visibleTasks.length"
+              key="empty"
+              :title="taskKindFilter === 'all' ? '当日暂无任务' : `当日暂无${taskKindFilter === 0 ? '普通' : '项目'}任务`"
+              hint="点击右上角的加号，安排这一天的第一件事。"
+            />
+          </TransitionGroup>
         </div>
       </section>
     </div>
@@ -1230,6 +1235,10 @@ onMounted(async () => {
   padding: 6px 22px 18px;
 }
 
+.task-list-track {
+  position: relative;
+}
+
 .task-row {
   display: flex;
   align-items: flex-start;
@@ -1237,7 +1246,12 @@ onMounted(async () => {
   padding: 12px 14px;
   margin-bottom: 6px;
   border-radius: 8px;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.18s ease, opacity 0.18s ease;
+}
+
+.task-move {
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
 .task-row.priority-urgent {
@@ -1261,13 +1275,14 @@ onMounted(async () => {
 }
 
 .task-row.is-done {
-  background: #f1f5f2;
-  box-shadow: inset 0 0 0 1px #e3eae6;
-  opacity: 1;
+  background: #f6f7f9;
+  box-shadow: none;
+  opacity: 0.72;
 }
 
 .task-row.is-done:hover {
-  background: #eaf1ec;
+  background: #f1f3f5;
+  opacity: 0.9;
 }
 
 .task-check {

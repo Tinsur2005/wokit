@@ -402,7 +402,7 @@ onMounted(load)
       <StatCard label="本周周报" :value="weeklyThisWeek" unit="条" tone="violet" :icon="DocumentChecked" />
     </div>
 
-    <div class="dash-grid">
+    <div class="dash-grid dash-grid--full">
       <section class="wk-card chart-card chart-card--main">
         <div class="chart-head">
           <div>
@@ -441,6 +441,27 @@ onMounted(load)
           />
         </div>
       </section>
+    </div>
+
+    <div class="dash-grid">
+      <section class="wk-card chart-card chart-card--weekly">
+        <div class="chart-head">
+          <div>
+            <h2 class="chart-title">周报记录</h2>
+            <p class="chart-sub">近 4 周 · 本周 {{ weeklyThisWeek }} 条</p>
+          </div>
+          <span class="chart-badge">每周汇总</span>
+        </div>
+        <div class="chart-body">
+          <EChart
+            :option="weeklyTrendOption"
+            height="var(--dash-chart-sub)"
+            :empty="weeklyEmpty && !loadFailed"
+            :loading="loading"
+            empty-text="近 4 周还没有周报记录"
+          />
+        </div>
+      </section>
 
       <section class="wk-card chart-card">
         <div class="chart-head">
@@ -453,7 +474,7 @@ onMounted(load)
           <div class="project-donut-wrap">
             <EChart
               :option="projectHoursOption"
-              height="var(--dash-chart-main)"
+              height="var(--dash-chart-sub)"
               :empty="projectEmpty && !loadFailed"
               :loading="loading"
               empty-text="本周还没有工时记录"
@@ -470,25 +491,6 @@ onMounted(load)
         </div>
       </section>
     </div>
-
-    <section class="wk-card chart-card chart-card--weekly">
-      <div class="chart-head">
-        <div>
-          <h2 class="chart-title">周报记录</h2>
-          <p class="chart-sub">近 4 周 · 本周 {{ weeklyThisWeek }} 条</p>
-        </div>
-        <span class="chart-badge">每周汇总</span>
-      </div>
-      <div class="chart-body">
-        <EChart
-          :option="weeklyTrendOption"
-          height="var(--dash-chart-sub)"
-          :empty="weeklyEmpty && !loadFailed"
-          :loading="loading"
-          empty-text="近 4 周还没有周报记录"
-        />
-      </div>
-    </section>
   </div>
 </template>
 
@@ -515,6 +517,14 @@ onMounted(load)
   display: grid;
   grid-template-columns: minmax(0, 1.85fr) minmax(310px, 1fr);
   gap: 16px;
+}
+
+.dash-grid + .dash-grid {
+  margin-top: 16px;
+}
+
+.dash-grid--full {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chart-card {
@@ -648,6 +658,10 @@ onMounted(load)
   .dash-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  .dash-grid + .dash-grid {
+    margin-top: 12px;
   }
 
   .chart-head {
