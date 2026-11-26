@@ -7,6 +7,8 @@ export const useSystemConfigStore = defineStore('systemConfig', {
     systemSubName: '工作助手',
     browserTitle: 'Wokit 工作助手',
     loginHint: '使用平台账号进入工作台',
+    taskDefaultStartTime: '09:00',
+    taskDefaultEndTime: '18:30',
     loaded: false
   }),
   actions: {
@@ -26,6 +28,12 @@ export const useSystemConfigStore = defineStore('systemConfig', {
       this.systemSubName = config.systemSubName || '工作助手'
       this.browserTitle = config.browserTitle || `${this.systemName} ${this.systemSubName}`.trim()
       this.loginHint = config.loginHint || '使用平台账号进入工作台'
+      this.taskDefaultStartTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(config.taskDefaultStartTime || '')
+        ? config.taskDefaultStartTime
+        : '09:00'
+      this.taskDefaultEndTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(config.taskDefaultEndTime || '')
+        ? config.taskDefaultEndTime
+        : '18:30'
     },
     applyDocumentTitle(pageTitle) {
       document.title = pageTitle ? `${pageTitle} · ${this.browserTitle}` : this.browserTitle

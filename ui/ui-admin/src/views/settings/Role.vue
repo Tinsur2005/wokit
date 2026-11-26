@@ -143,6 +143,7 @@ const savingPermission = ref(false)
 const defaultProps = { children: 'children', label: 'name' }
 
 const isAdminRole = computed(() => currentRole.value.code === 'admin')
+const drawerSize = computed(() => (isCompact.value ? '100%' : '560px'))
 
 const showPermissionDrawer = (row) => {
   currentRole.value = row
@@ -364,7 +365,12 @@ fetchList()
       </template>
     </el-dialog>
 
-    <el-drawer v-model="drawerVisible" size="560px" :title="`分配权限 · ${currentRole.name || ''}`">
+    <el-drawer
+      v-model="drawerVisible"
+      :size="drawerSize"
+      class="role-permission-drawer"
+      :title="`分配权限 · ${currentRole.name || ''}`"
+    >
       <div v-loading="treeLoading" class="permission-drawer">
         <div v-if="isAdminRole" class="admin-permission-tip">
           管理员角色固定拥有全部权限，保存时也会自动补全，无法被裁剪。
@@ -552,6 +558,57 @@ fetchList()
 @media (max-width: 900px) {
   .role-cell {
     flex-wrap: wrap;
+  }
+
+  :global(.role-permission-drawer .el-drawer__body) {
+    padding: 0 16px 12px;
+    overflow-x: hidden;
+  }
+
+  :global(.role-permission-drawer .el-drawer__header) {
+    margin-bottom: 14px;
+    padding: 16px 16px 0;
+  }
+
+  :global(.role-permission-drawer .el-drawer__title) {
+    overflow: hidden;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .permission-tree :deep(.el-tree-node__content) {
+    height: auto;
+    min-height: 34px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    align-items: flex-start;
+  }
+
+  .tree-node {
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    padding: 1px 0;
+  }
+
+  .tree-node-name {
+    flex: 1 1 calc(100% - 70px);
+    min-width: 0;
+    line-height: 20px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .tree-node-path,
+  .tree-node-value {
+    flex: 1 1 100%;
+    padding-left: 0;
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  .drawer-footer {
+    padding: 0 16px 8px;
   }
 }
 

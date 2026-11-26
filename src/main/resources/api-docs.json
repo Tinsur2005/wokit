@@ -1,0 +1,589 @@
+{
+  "title": "Wokit 开放 API",
+  "version": "1.0.0",
+  "baseUrl": "/api/v1",
+  "updatedAt": "2026-11-26",
+  "overview": "Wokit 开放 API 面向桌面端、手机 App 和可信服务端。App 只允许登录，不提供注册接口；用户账号由管理员在网页端「用户管理」中创建。",
+  "authRules": [
+    "App 登录：请求头携带 X-Wokit-Client-Key（Access Key），请求体携带用户账号和密码。Secret Key 不进入 App 安装包。",
+    "业务接口：请求头携带 Authorization: Bearer <accessToken>，Token 中的 userId 决定数据归属。",
+    "服务端对接：使用 Access Key / Secret Key 调用 /oauth/token 获取 Service Token，Secret 只保存在服务器环境变量或密钥管理系统中。",
+    "App 没有 /auth/register 接口，任何自助注册请求都不会被受理。",
+    "用户 Token 有效期 1 小时；Refresh Token 有效期 30 天，每次刷新都会轮换，旧 Refresh Token 立即失效。",
+    "所有业务接口只返回当前 Token 对应用户的数据，不接受请求体传 userId。"
+  ],
+  "httpRules": [
+    "成功：HTTP 200，响应体 code = 1。",
+    "参数错误：HTTP 400。",
+    "未登录、Token 失效、密钥无效：HTTP 401。",
+    "账号停用、权限不足、IP 不在白名单：HTTP 403。",
+    "登录失败次数过多：HTTP 429。",
+    "业务校验失败：HTTP 200，响应体 code = 0，msg 为具体原因。"
+  ],
+  "groups": [
+    {
+      "name": "认证与账号",
+      "key": "auth",
+      "description": "App 登录、Token 刷新、退出、当前用户、修改密码，以及服务端 Client Credentials。App 不提供注册接口，账号只能由管理员在网页端用户管理中创建。",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/login",
+          "summary": "App 用户登录",
+          "auth": "Access Key + 用户账号密码",
+          "permission": "应用 Key 必须为启用状态；用户必须由管理员创建且处于启用状态",
+          "headers": [
+            {"name": "X-Wokit-Client-Key", "value": "wk_ak_xxx", "description": "API Key 页面创建的 Access Key"}
+          ],
+          "body": {
+            "username": "demo",
+            "password": "123456",
+            "deviceId": "desktop-01",
+            "deviceName": "演示设备"
+          },
+          "response": {
+            "code": 1,
+            "msg": "登录成功",
+            "data": {
+              "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+              "refreshToken": "wk_rt_xxx",
+              "tokenType": "Bearer",
+              "expiresIn": 3600,
+              "user": {
+                "id": 2,
+                "name": "demo",
+                "realName": "演示用户",
+                "avatar": null,
+                "role": 0,
+                "roleName": "普通用户"
+              }
+            }
+          },
+          "notes": "Secret Key 不需要参与 App 登录。Access Key 是公开的应用标识，被停用后登录立即失败。"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/refresh",
+          "summary": "刷新用户 Token",
+          "auth": "无需 Authorization；请求体携带 refreshToken",
+          "permission": "Refresh Token 未撤销、未过期；应用 Key 仍启用；用户仍启用",
+          "body": {
+            "refreshToken": "wk_rt_xxx",
+            "deviceId": "desktop-01",
+            "deviceName": "演示设备"
+          },
+          "response": {
+            "code": 1,
+            "msg": "刷新成功",
+            "data": {
+              "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+              "refreshToken": "wk_rt_yyy",
+              "tokenType": "Bearer",
+              "expiresIn": 3600,
+              "user": {"id": 2, "name": "demo", "realName": "演示用户", "role": 0, "roleName": "普通用户"}
+            }
+          },
+          "notes": "Refresh Token 使用一次后立即失效，客户端必须保存返回的新 refreshToken。"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/logout",
+          "summary": "退出登录",
+          "auth": "无需 Authorization；请求体携带 refreshToken",
+          "permission": "无",
+          "body": {"refreshToken": "wk_rt_xxx"},
+          "response": {"code": 1, "msg": "已退出登录", "data": null},
+          "notes": "退出只撤销 Refresh Token，已经签发的 Access Token 最长 1 小时后自然过期。"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "summary": "当前用户信息与权限",
+          "auth": "Bearer User Token 或 Service Token",
+          "permission": "有效 Token",
+          "response": {
+            "code": 1,
+            "msg": null,
+            "data": {
+              "user": {"id": 2, "name": "demo", "realName": "演示用户", "role": 0, "roleName": "普通用户"},
+              "routerList": [],
+              "btnList": ["task:add", "task:edit"]
+            }
+          },
+          "notes": "App 可以用 btnList 控制按钮显隐；数据接口仍由服务端再次校验权限。"
+        },
+        {
+          "method": "PUT",
+          "path": "/me/password",
+          "summary": "修改当前用户密码",
+          "auth": "Bearer User Token",
+          "permission": "仅用户 Token，Service Token 不允许调用",
+          "body": {"oldPassword": "123456", "newPassword": "654321"},
+          "response": {"code": 1, "msg": "密码修改成功，请重新登录", "data": null},
+          "notes": "修改成功后服务端撤销该用户全部 Refresh Token，App 应清除本地登录状态。"
+        },
+        {
+          "method": "POST",
+          "path": "/oauth/token",
+          "summary": "服务端 Client Credentials 换取 Service Token",
+          "auth": "Access Key + Secret Key",
+          "permission": "仅 service 类型的 API Key；Key 所属用户必须有 API Key 访问权限",
+          "contentType": "application/x-www-form-urlencoded",
+          "body": {
+            "grant_type": "client_credentials",
+            "client_id": "wk_ak_xxx",
+            "client_secret": "wk_sk_xxx"
+          },
+          "response": {
+            "code": 1,
+            "msg": "获取成功",
+            "data": {
+              "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+              "tokenType": "Bearer",
+              "expiresIn": 3600,
+              "scope": "data:read,data:write",
+              "apiKeyId": 1
+            }
+          },
+          "notes": "Service Token 的数据归属为 Key 所属用户。Secret 只应在服务端保存，禁止写入桌面端或手机 App 安装包。"
+        }
+      ]
+    },
+    {
+      "name": "首页看板",
+      "key": "dashboard",
+      "description": "工作台首页的汇总数据。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/dashboard",
+          "summary": "获取首页看板数据",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "response": {
+            "code": 1,
+            "data": {
+              "taskStat": {"total": 8, "pending": 3, "doing": 2, "done": 3},
+              "todayHours": 6.5,
+              "weeklyCount": 3,
+              "trend": [],
+              "projectHours": [],
+              "weeklyTrend": []
+            }
+          },
+          "notes": "字段以实际返回为准，公式和统计口径与网页端首页一致。"
+        }
+      ]
+    },
+    {
+      "name": "每日任务",
+      "key": "tasks",
+      "description": "任务状态：0 待处理、1 进行中、2 阻塞中、3 已完成；优先级：0 紧急、1 重要、2 普通、3 低优先级。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/tasks",
+          "summary": "分页查询任务",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "query": [
+            {"name": "page", "type": "int", "required": false, "description": "页码，默认 1"},
+            {"name": "limit", "type": "int", "required": false, "description": "每页数量，默认 10"},
+            {"name": "keyword", "type": "string", "required": false, "description": "标题/描述关键字"},
+            {"name": "status", "type": "int", "required": false, "description": "任务状态"},
+            {"name": "date", "type": "string", "required": false, "description": "日期，格式 yyyy-MM-dd"},
+            {"name": "projectId", "type": "long", "required": false, "description": "项目 ID"}
+          ],
+          "response": {
+            "code": 1,
+            "data": {
+              "records": [
+                {"id": 1, "title": "完成接口联调", "description": "验证登录与任务接口", "priority": 1, "status": 1, "startTime": "2026-11-26 09:30:00", "deadline": "2026-11-26 11:00:00", "projectId": null}
+              ],
+              "total": 1, "size": 10, "current": 1, "pages": 1
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/tasks/date",
+          "summary": "查询某一天的任务",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "query": [{"name": "date", "type": "string", "required": true, "description": "yyyy-MM-dd"}],
+          "response": {"code": 1, "data": [{"id": 1, "title": "完成接口联调", "status": 1, "priority": 1}]}
+        },
+        {
+          "method": "GET",
+          "path": "/tasks/calendar",
+          "summary": "查询某月日历任务标记",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "query": [{"name": "month", "type": "string", "required": true, "description": "yyyy-MM"}],
+          "response": {"code": 1, "data": [{"date": "2026-11-26", "count": 3, "allDone": false}]}
+        },
+        {
+          "method": "GET",
+          "path": "/tasks/stat",
+          "summary": "任务统计卡片",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "response": {"code": 1, "data": {"total": 8, "pending": 3, "doing": 2, "blocked": 0, "done": 3, "today": 4}}
+        },
+        {
+          "method": "GET",
+          "path": "/tasks/{id}",
+          "summary": "任务详情",
+          "auth": "Bearer Token",
+          "permission": "有效 Token，且任务属于当前用户",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "任务 ID"}],
+          "response": {"code": 1, "data": {"id": 1, "title": "完成接口联调", "priority": 1, "status": 1}}
+        },
+        {
+          "method": "POST",
+          "path": "/tasks",
+          "summary": "新增任务",
+          "auth": "Bearer Token",
+          "permission": "task:add",
+          "body": {
+            "title": "完成接口联调",
+            "description": "验证登录与任务接口",
+            "priority": 1,
+            "startTime": "2026-11-26 09:30:00",
+            "deadline": "2026-11-26 11:00:00",
+            "projectId": null
+          },
+          "response": {"code": 1, "msg": "新增成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/tasks/{id}",
+          "summary": "修改任务",
+          "auth": "Bearer Token",
+          "permission": "task:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "任务 ID"}],
+          "body": {"title": "完成接口联调", "description": "补充移动端", "priority": 0, "startTime": "2026-11-26 09:30:00", "deadline": "2026-11-26 12:00:00", "projectId": null},
+          "response": {"code": 1, "msg": "修改成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/tasks/status/{id}",
+          "summary": "修改任务状态",
+          "auth": "Bearer Token",
+          "permission": "task:toggle",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "任务 ID"}],
+          "query": [{"name": "status", "type": "int", "required": true, "description": "0 待处理 / 1 进行中 / 2 阻塞中 / 3 已完成"}],
+          "response": {"code": 1, "msg": "任务状态已更新", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/tasks/priority/{id}",
+          "summary": "修改任务优先级",
+          "auth": "Bearer Token",
+          "permission": "task:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "任务 ID"}],
+          "query": [{"name": "priority", "type": "int", "required": true, "description": "0 紧急 / 1 重要 / 2 普通 / 3 低优先级"}],
+          "response": {"code": 1, "msg": "优先级已更新", "data": null}
+        },
+        {
+          "method": "DELETE",
+          "path": "/tasks/{id}",
+          "summary": "删除任务",
+          "auth": "Bearer Token",
+          "permission": "task:delete",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "任务 ID"}],
+          "response": {"code": 1, "msg": "删除成功", "data": null}
+        }
+      ]
+    },
+    {
+      "name": "周报",
+      "key": "weeklies",
+      "description": "周报按周查询；taskTitle 必填，taskContent 选填。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/weeklies",
+          "summary": "查询某一周的周报",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "query": [{"name": "weekStart", "type": "string", "required": false, "description": "周一日期 yyyy-MM-dd"}],
+          "response": {"code": 1, "data": [{"id": 1, "weekStart": "2026-11-23", "weekEnd": "2026-11-29", "taskTitle": "完成接口联调", "taskContent": "完成登录与任务接口", "taskResult": "联调通过", "projectId": null}]}
+        },
+        {
+          "method": "POST",
+          "path": "/weeklies",
+          "summary": "新增周报",
+          "auth": "Bearer Token",
+          "permission": "weekly:add",
+          "body": {"weekStart": "2026-11-23", "weekEnd": "2026-11-29", "taskTitle": "完成接口联调", "taskContent": "完成登录与任务接口", "taskResult": "联调通过", "resolvedProblem": "", "problem": "", "output": "", "extra": "", "projectId": null},
+          "response": {"code": 1, "msg": "新增成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/weeklies/{id}",
+          "summary": "修改周报",
+          "auth": "Bearer Token",
+          "permission": "weekly:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "周报 ID"}],
+          "body": {"weekStart": "2026-11-23", "weekEnd": "2026-11-29", "taskTitle": "完成接口联调", "taskContent": "完成登录与任务接口", "taskResult": "联调通过", "projectId": null},
+          "response": {"code": 1, "msg": "修改成功", "data": null}
+        },
+        {
+          "method": "DELETE",
+          "path": "/weeklies/{id}",
+          "summary": "删除周报",
+          "auth": "Bearer Token",
+          "permission": "weekly:delete",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "周报 ID"}],
+          "response": {"code": 1, "msg": "删除成功", "data": null}
+        }
+      ]
+    },
+    {
+      "name": "备忘录",
+      "key": "memos",
+      "description": "备忘录按置顶优先返回。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/memos",
+          "summary": "查询备忘录",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "query": [{"name": "keyword", "type": "string", "required": false, "description": "内容关键字"}],
+          "response": {"code": 1, "data": [{"id": 1, "content": "每周五提交工时", "color": "green", "pinned": 1}]}
+        },
+        {
+          "method": "POST",
+          "path": "/memos",
+          "summary": "新增备忘录",
+          "auth": "Bearer Token",
+          "permission": "memo:add",
+          "body": {"content": "每周五提交工时", "color": "green", "pinned": 0},
+          "response": {"code": 1, "msg": "新增成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/memos/{id}",
+          "summary": "修改备忘录",
+          "auth": "Bearer Token",
+          "permission": "memo:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "备忘录 ID"}],
+          "body": {"content": "每周五 17:00 前提交工时", "color": "amber", "pinned": 1},
+          "response": {"code": 1, "msg": "修改成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/memos/pin/{id}",
+          "summary": "置顶 / 取消置顶",
+          "auth": "Bearer Token",
+          "permission": "memo:pin",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "备忘录 ID"}],
+          "response": {"code": 1, "msg": "操作成功", "data": null}
+        },
+        {
+          "method": "DELETE",
+          "path": "/memos/{id}",
+          "summary": "删除备忘录",
+          "auth": "Bearer Token",
+          "permission": "memo:delete",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "备忘录 ID"}],
+          "response": {"code": 1, "msg": "删除成功", "data": null}
+        }
+      ]
+    },
+    {
+      "name": "工时",
+      "key": "worklogs",
+      "description": "工时按日期和项目登记。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/worklogs",
+          "summary": "分页查询工时",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "query": [
+            {"name": "page", "type": "int", "required": false, "description": "页码"},
+            {"name": "limit", "type": "int", "required": false, "description": "每页数量"},
+            {"name": "month", "type": "string", "required": false, "description": "月份 yyyy-MM"},
+            {"name": "keyword", "type": "string", "required": false, "description": "事项/内容关键字"},
+            {"name": "projectId", "type": "long", "required": false, "description": "项目 ID"}
+          ],
+          "response": {"code": 1, "data": {"records": [{"id": 1, "workDate": "2026-11-26", "project": "Wokit", "projectId": 1, "content": "接口开发", "hours": 6.5}], "total": 1, "current": 1, "size": 10}}
+        },
+        {
+          "method": "GET",
+          "path": "/worklogs/stat",
+          "summary": "某月工时统计",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "query": [{"name": "month", "type": "string", "required": false, "description": "yyyy-MM，空表示当前月"}],
+          "response": {"code": 1, "data": {"totalHours": 18.5, "days": 3, "projectHours": []}}
+        },
+        {
+          "method": "POST",
+          "path": "/worklogs",
+          "summary": "新增工时",
+          "auth": "Bearer Token",
+          "permission": "worklog:add",
+          "body": {"workDate": "2026-11-26", "project": "Wokit", "projectId": 1, "content": "接口开发", "hours": 6.5},
+          "response": {"code": 1, "msg": "新增成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/worklogs/{id}",
+          "summary": "修改工时",
+          "auth": "Bearer Token",
+          "permission": "worklog:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "工时 ID"}],
+          "body": {"workDate": "2026-11-26", "project": "Wokit", "projectId": 1, "content": "接口开发与联调", "hours": 7.0},
+          "response": {"code": 1, "msg": "修改成功", "data": null}
+        },
+        {
+          "method": "DELETE",
+          "path": "/worklogs/{id}",
+          "summary": "删除工时",
+          "auth": "Bearer Token",
+          "permission": "worklog:delete",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "工时 ID"}],
+          "response": {"code": 1, "msg": "删除成功", "data": null}
+        }
+      ]
+    },
+    {
+      "name": "计时",
+      "key": "timers",
+      "description": "计时模式：countdown_day 倒数日、countup_day 正数日、precise 精准倒计时。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/timers",
+          "summary": "查询计时列表",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "response": {"code": 1, "data": [{"id": 1, "name": "项目上线", "mode": "countdown_day", "targetTime": "2026-12-01 00:00:00"}]}
+        },
+        {
+          "method": "POST",
+          "path": "/timers",
+          "summary": "新增计时",
+          "auth": "Bearer Token",
+          "permission": "timer:add",
+          "body": {"name": "项目上线", "mode": "countdown_day", "targetTime": "2026-12-01 00:00:00"},
+          "response": {"code": 1, "msg": "新增成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/timers/{id}",
+          "summary": "修改计时",
+          "auth": "Bearer Token",
+          "permission": "timer:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "计时 ID"}],
+          "body": {"name": "项目上线", "mode": "precise", "targetTime": "2026-12-01 09:00:00"},
+          "response": {"code": 1, "msg": "修改成功", "data": null}
+        },
+        {
+          "method": "DELETE",
+          "path": "/timers/{id}",
+          "summary": "删除计时",
+          "auth": "Bearer Token",
+          "permission": "timer:delete",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "计时 ID"}],
+          "response": {"code": 1, "msg": "删除成功", "data": null}
+        }
+      ]
+    },
+    {
+      "name": "项目",
+      "key": "projects",
+      "description": "项目按创建时间倒序，支持关键字和分类筛选。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/projects",
+          "summary": "查询项目列表",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "query": [
+            {"name": "categoryId", "type": "long", "required": false, "description": "分类 ID"},
+            {"name": "keyword", "type": "string", "required": false, "description": "项目名称关键字"}
+          ],
+          "response": {"code": 1, "data": [{"id": 1, "name": "Wokit 工作助手", "categoryId": 1, "categoryName": "个人项目"}]}
+        },
+        {
+          "method": "POST",
+          "path": "/projects",
+          "summary": "新增项目",
+          "auth": "Bearer Token",
+          "permission": "project:add",
+          "body": {"name": "Wokit 工作助手", "categoryId": 1},
+          "response": {"code": 1, "msg": "新增成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/projects/{id}",
+          "summary": "修改项目",
+          "auth": "Bearer Token",
+          "permission": "project:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "项目 ID"}],
+          "body": {"name": "Wokit 工作助手", "categoryId": 1},
+          "response": {"code": 1, "msg": "修改成功", "data": null}
+        },
+        {
+          "method": "DELETE",
+          "path": "/projects/{id}",
+          "summary": "删除项目",
+          "auth": "Bearer Token",
+          "permission": "project:delete",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "项目 ID"}],
+          "response": {"code": 1, "msg": "删除成功", "data": null}
+        }
+      ]
+    },
+    {
+      "name": "项目分类",
+      "key": "project-categories",
+      "description": "项目分类支持父子层级，parentId 为空表示一级分类。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/project-categories",
+          "summary": "查询项目分类",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "response": {"code": 1, "data": [{"id": 1, "parentId": null, "name": "个人项目", "children": []}]}
+        },
+        {
+          "method": "POST",
+          "path": "/project-categories",
+          "summary": "新增项目分类",
+          "auth": "Bearer Token",
+          "permission": "project:category:add",
+          "body": {"name": "个人项目", "parentId": null},
+          "response": {"code": 1, "msg": "新增成功", "data": null}
+        },
+        {
+          "method": "PUT",
+          "path": "/project-categories/{id}",
+          "summary": "修改项目分类",
+          "auth": "Bearer Token",
+          "permission": "project:category:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "分类 ID"}],
+          "body": {"name": "个人项目", "parentId": null},
+          "response": {"code": 1, "msg": "修改成功", "data": null}
+        },
+        {
+          "method": "DELETE",
+          "path": "/project-categories/{id}",
+          "summary": "删除项目分类",
+          "auth": "Bearer Token",
+          "permission": "project:category:delete",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "分类 ID"}],
+          "response": {"code": 1, "msg": "删除成功", "data": null}
+        }
+      ]
+    }
+  ]
+}

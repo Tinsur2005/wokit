@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Edit, Plus } from '@element-plus/icons-vue'
+import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue'
 import permissionApi from '@/api/permission'
 import EmptyState from '@/components/EmptyState.vue'
 import { menuIconMap, menuIconOptions } from '@/utils/menuIcons'
@@ -9,7 +9,7 @@ import hasBtnPermission from '@/utils/btnPermission'
 
 const treeData = ref([])
 const loading = ref(false)
-const total = computed(() => countNodes(treeData.value))
+const keyword = ref('')
 
 const isCompact = ref(false)
 let compactMedia
@@ -80,6 +80,35 @@ const parentOptions = computed(() => [
 
 const countNodes = (nodes = []) =>
   nodes.reduce((sum, node) => sum + 1 + countNodes(node.children || []), 0)
+
+const matchPermission = (node, text) =>
+  [node.name, node.path, node.permissionValue].some((value) =>
+    String(value || '').toLowerCase().includes(text)
+  )
+
+const filterPermissionTree = (nodes, text) =>
+  nodes.reduce((result, node) => {
+    const matched = matchPermission(node, text)
+    const children = filterPermissionTree(node.children || [], text)
+    if (matched || children.length) {
+      result.push({
+        ...node,
+        children: matched ? node.children || [] : children
+      })
+    }
+    return result
+  }, [])
+
+const filteredTree = computed(() => {
+  const text = keyword.value.trim().toLowerCase()
+  return text ? filterPermissionTree(treeData.value, text) : treeData.value
+})
+
+const filteredTotal = computed(() => countNodes(filteredTree.value))
+
+const resetSearch = () => {
+  keyword.value = ''
+}
 
 const loadTree = async () => {
   loading.value = true
@@ -249,7 +278,6 @@ loadTree()
         <p class="wk-page-desc">路由控制页面能否进入，菜单控制侧栏是否展示，按钮控制页面内操作是否可用。</p>
       </div>
       <div class="wk-page-actions">
-        <span class="total-chip">{{ total }} 项权限</span>
         <el-button v-if="hasBtnPermission('permission:add')" type="primary" :icon="Plus" @click="openRootCreate">
           添加路由
         </el-button>
@@ -257,16 +285,23 @@ loadTree()
     </div>
 
     <section class="wk-card permission-card">
-      <div class="wk-panel-head">
-        <div>
-          <p class="wk-panel-title">权限树</p>
-          <p class="wk-panel-sub">按层级维护路由目录、菜单页面与页面内按钮</p>
+      <div class="wk-panel-head permission-toolbar">
+        <div class="wk-toolbar">
+          <el-input
+            v-model="keyword"
+            class="search-input"
+            clearable
+            placeholder="搜索权限名称、路由地址、按钮标识"
+            :prefix-icon="Search"
+          />
+          <el-button @click="resetSearch">重置</el-button>
         </div>
+        <p class="toolbar-count">共 {{ filteredTotal }} 项权限</p>
       </div>
 
       <el-table
         v-loading="loading"
-        :data="treeData"
+        :data="filteredTree"
         row-key="id"
         class="wk-table permission-table"
         default-expand-all
@@ -379,7 +414,11 @@ loadTree()
         </el-table-column>
 
         <template #empty>
-          <EmptyState compact title="暂无权限数据" hint="点击右上角「添加路由」创建第一项权限。" />
+          <EmptyState
+            compact
+            :title="keyword ? '没有匹配的权限' : '暂无权限数据'"
+            :hint="keyword ? '换一个关键词试试' : '点击右上角「添加路由」创建第一项权限。'"
+          />
         </template>
       </el-table>
     </section>
@@ -424,16 +463,23 @@ loadTree()
         </el-form-item>
 
         <el-form-item v-if="form.type !== 2" label="菜单图标">
-          <el-select v-model="form.icon" clearable placeholder="请选择菜单图标" style="width: 100%" popper-class="menu-icon-popper">
+          <el-select
+            v-model="form.icon"
+            clearable
+            filterable
+            placeholder="搜索或选择菜单图标"
+            style="width: 100%"
+            popper-class="menu-icon-popper"
+          >
             <el-option
               v-for="item in menuIconOptions"
               :key="item.value"
-              :label="`${item.label} · ${item.value}`"
+              :label="item.label === item.value ? item.value : `${item.label} · ${item.value}`"
               :value="item.value"
             >
               <div class="icon-option">
                 <el-icon><component :is="item.component" /></el-icon>
-                <span class="icon-option-label">{{ item.label }}</span>
+                <span v-if="item.label !== item.value" class="icon-option-label">{{ item.label }}</span>
                 <span class="icon-option-value">{{ item.value }}</span>
               </div>
             </el-option>
@@ -475,15 +521,17 @@ loadTree()
 </template>
 
 <style scoped>
-.total-chip {
-  height: 26px;
-  padding: 0 9px;
-  border-radius: 6px;
-  background: #fff;
-  border: 1px solid var(--wk-line);
-  color: var(--wk-text-2);
-  font-size: 11.5px;
-  line-height: 24px;
+.permission-toolbar {
+  flex-wrap: wrap;
+}
+
+.search-input {
+  width: 320px;
+}
+
+.toolbar-count {
+  color: var(--wk-text-3);
+  font-size: 12px;
 }
 
 .permission-card {
@@ -532,6 +580,7 @@ loadTree()
 }
 
 :global(.menu-icon-popper .icon-option-value) {
+  margin-left: auto;
   color: var(--wk-text-3);
   font-size: 12px;
 }
@@ -641,6 +690,26 @@ loadTree()
 }
 
 @media (max-width: 768px) {
+  .permission-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .wk-toolbar {
+    width: 100%;
+  }
+
+  .search-input {
+    flex: 1;
+    width: auto;
+    min-width: 150px;
+  }
+
+  .toolbar-count {
+    display: none;
+  }
+
   .form-grid {
     grid-template-columns: 1fr;
     gap: 0;

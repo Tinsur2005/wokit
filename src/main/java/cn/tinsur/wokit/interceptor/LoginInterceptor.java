@@ -25,6 +25,12 @@ public class LoginInterceptor implements HandlerInterceptor {
         try {
             // 解析 token，解析失败（过期、伪造）会抛异常
             JwtUtil.parseToken(token);
+            // 开放 API 的 App / 服务 Token 不能用于网页端
+            String type = JwtUtil.getType(token);
+            if (type != null && !"web".equals(type)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return false;
+            }
             return true; // 放行
         } catch (Exception e) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

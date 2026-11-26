@@ -1,6 +1,9 @@
 package cn.tinsur.wokit.config;
 
+import cn.tinsur.wokit.interceptor.ApiAuthInterceptor;
+import cn.tinsur.wokit.interceptor.ApiPermissionInterceptor;
 import cn.tinsur.wokit.interceptor.LoginInterceptor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.format.FormatterRegistry;
@@ -16,12 +19,36 @@ import java.util.List;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
+    @Autowired
+    private ApiAuthInterceptor apiAuthInterceptor;
+
+    @Autowired
+    private ApiPermissionInterceptor apiPermissionInterceptor;
+
     @Override
-    // 拦截所有请求，登录接口放行
+    // 拦截所有请求，登录接口放行；开放 API 使用独立拦截器
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new LoginInterceptor())
                 .addPathPatterns("/**")
-                .excludePathPatterns("/admin/users/login", "/admin/system/public");
+                .excludePathPatterns("/admin/users/login", "/admin/system/public", "/api/v1/**");
+
+        registry.addInterceptor(apiAuthInterceptor)
+                .addPathPatterns("/api/v1/**")
+                .excludePathPatterns(
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/refresh",
+                        "/api/v1/auth/logout",
+                        "/api/v1/oauth/token")
+                .order(1);
+
+        registry.addInterceptor(apiPermissionInterceptor)
+                .addPathPatterns("/api/v1/**")
+                .excludePathPatterns(
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/refresh",
+                        "/api/v1/auth/logout",
+                        "/api/v1/oauth/token")
+                .order(2);
     }
 
     @Override

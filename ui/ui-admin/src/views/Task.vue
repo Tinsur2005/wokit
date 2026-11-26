@@ -20,10 +20,13 @@ import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import WeeklyCreateDialog from '@/components/WeeklyCreateDialog.vue'
 import { useProjectStore } from '@/store/project'
+import { useSystemConfigStore } from '@/store/systemConfig'
 import hasBtnPermission from '@/utils/btnPermission'
 
 const pad = (num) => String(num).padStart(2, '0')
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+const normalizeTaskTime = (value, fallback) =>
+  /^([01]\d|2[0-3]):[0-5]\d$/.test(value || '') ? value : fallback
 const parseDate = (str) => {
   const [year, month, day] = str.split('-').map(Number)
   return new Date(year, month - 1, day)
@@ -39,6 +42,7 @@ const weekStartOf = (value) => {
 
 const selectedDate = ref(todayStr)
 const viewMonth = ref(todayStr.slice(0, 7))
+const systemConfigStore = useSystemConfigStore()
 const tasks = ref([])
 const marks = ref([])
 const stat = ref({
@@ -236,13 +240,15 @@ const handleStartChange = () => {
 const openCreate = () => {  dialogMode.value = 'create'
   editingId.value = null
   projectBound.value = false
+  const defaultStartTime = normalizeTaskTime(systemConfigStore.taskDefaultStartTime, '09:00')
+  const defaultEndTime = normalizeTaskTime(systemConfigStore.taskDefaultEndTime, '18:30')
   form.value = {
     title: '',
     description: '',
     priority: 2,
     status: 0,
-    startTime: `${selectedDate.value} 09:00:00`,
-    deadline: `${selectedDate.value} 18:00:00`,
+    startTime: `${selectedDate.value} ${defaultStartTime}:00`,
+    deadline: `${selectedDate.value} ${defaultEndTime}:00`,
     projectId: null
   }
   dialogVisible.value = true
@@ -1007,6 +1013,7 @@ onMounted(() => {
   padding: 12px 14px;
   margin-bottom: 6px;
   border-radius: 8px;
+  transition: background-color 0.15s ease;
 }
 
 .task-row.priority-urgent {
@@ -1030,7 +1037,13 @@ onMounted(() => {
 }
 
 .task-row.is-done {
-  opacity: 0.82;
+  background: #f1f5f2;
+  box-shadow: inset 0 0 0 1px #e3eae6;
+  opacity: 1;
+}
+
+.task-row.is-done:hover {
+  background: #eaf1ec;
 }
 
 .task-check {

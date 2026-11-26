@@ -3,26 +3,16 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowLeft,
-  Avatar,
-  Key,
-  Menu,
-  Setting,
-  User
+  Menu
 } from '@element-plus/icons-vue'
 import brandMark from '@/assets/brand-mark.png'
 import { useSystemConfigStore } from '@/store/systemConfig'
 import { useUserInfoStore } from '@/store/userInfo'
+import { menuIconMap } from '@/utils/menuIcons'
 
 const router = useRouter()
 const userInfoStore = useUserInfoStore()
 const systemConfigStore = useSystemConfigStore()
-
-const iconMap = {
-  Avatar,
-  Key,
-  Setting,
-  User
-}
 
 const settingsRoot = computed(() =>
   (userInfoStore.routerList || []).find((item) => item.type === 0 && item.path === '/settings')
@@ -35,7 +25,7 @@ const menus = computed(() => {
     .map((item) => ({
       path: item.path,
       name: item.name,
-      icon: iconMap[item.icon] || Menu
+      icon: menuIconMap[item.icon] || Menu
     }))
     .filter((item) => userInfoStore.hasRoutePermission(item.path))
 })

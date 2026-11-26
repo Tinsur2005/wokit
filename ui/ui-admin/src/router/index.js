@@ -41,7 +41,9 @@ const router = createRouter({
         { path: 'general', component: () => import('@/views/settings/General.vue'), meta: { title: '系统信息' } },
         { path: 'users', component: () => import('@/views/settings/User.vue'), meta: { title: '用户管理' } },
         { path: 'roles', component: () => import('@/views/settings/Role.vue'), meta: { title: '角色管理' } },
-        { path: 'permissions', component: () => import('@/views/settings/Permission.vue'), meta: { title: '权限管理' } }
+        { path: 'permissions', component: () => import('@/views/settings/Permission.vue'), meta: { title: '权限管理' } },
+        { path: 'api-keys', component: () => import('@/views/settings/ApiKeys.vue'), meta: { title: 'API Key' } },
+        { path: 'api-docs', component: () => import('@/views/settings/ApiDocs.vue'), meta: { title: '接口文档' } }
       ]
     },
     { path: '/:pathMatch(.*)*', redirect: '/dashboard' }

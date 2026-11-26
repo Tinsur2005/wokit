@@ -22,3 +22,8 @@ mybatis-plus:
 wokit:
   backup:
     secret: ${WOKIT_BACKUP_SECRET:wokit-backup-2026-v1-change-me}
+  jwt:
+    secret: ${WOKIT_JWT_SECRET:tinsur-wokit}
+  api:
+    access-token-seconds: 3600
+    refresh-token-days: 30

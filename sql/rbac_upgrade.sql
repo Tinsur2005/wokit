@@ -110,7 +110,7 @@ VALUES
 (201, 200, '系统信息', 1, '/settings/general', NULL, 'Setting', 1, 1, NOW(), NOW()),
 (202, 200, '用户管理', 1, '/settings/users', NULL, 'User', 2, 1, NOW(), NOW()),
 (203, 200, '角色管理', 1, '/settings/roles', NULL, 'Avatar', 3, 1, NOW(), NOW()),
-(204, 200, '权限管理', 1, '/settings/permissions', NULL, 'Key', 4, 1, NOW(), NOW()),
+(204, 200, '权限管理', 1, '/settings/permissions', NULL, 'Lock', 4, 1, NOW(), NOW()),
 -- 每日任务按钮
 (1101, 102, '新增任务', 2, NULL, 'task:add', NULL, 1, 1, NOW(), NOW()),
 (1102, 102, '编辑任务', 2, NULL, 'task:edit', NULL, 2, 1, NOW(), NOW()),
@@ -193,5 +193,7 @@ VALUES
 ('system_name', 'Wokit', '系统名称，显示在工作台与系统设置左上角', NOW()),
 ('system_sub_name', '工作助手', '系统副标题，显示在系统名称下方', NOW()),
 ('browser_title', 'Wokit 工作助手', '浏览器标题后缀', NOW()),
-('login_hint', '使用平台账号进入工作台', '登录页账号表单说明', NOW())
+('login_hint', '使用平台账号进入工作台', '登录页账号表单说明', NOW()),
+('task_default_start_time', '09:00', '新建任务默认开始时间，仅保存时分，不包含日期', NOW()),
+('task_default_end_time', '18:30', '新建任务默认截止时间，仅保存时分，不包含日期', NOW())
 ON DUPLICATE KEY UPDATE `description` = VALUES(`description`);

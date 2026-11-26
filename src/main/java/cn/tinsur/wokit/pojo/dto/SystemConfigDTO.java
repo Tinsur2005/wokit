@@ -29,4 +29,14 @@ public class SystemConfigDTO {
      * 登录页表单说明
      */
     private String loginHint;
+
+    /**
+     * 新建任务的默认开始时间，只保存时分，例如 09:00
+     */
+    private String taskDefaultStartTime;
+
+    /**
+     * 新建任务的默认截止时间，只保存时分，例如 18:30
+     */
+    private String taskDefaultEndTime;
 }

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Check, Monitor } from '@element-plus/icons-vue'
+import { Check, Monitor, Timer } from '@element-plus/icons-vue'
 import systemApi from '@/api/system'
 import brandMark from '@/assets/brand-mark.png'
 import hasBtnPermission from '@/utils/btnPermission'
@@ -17,7 +17,9 @@ const form = ref({
   systemName: '',
   systemSubName: '',
   browserTitle: '',
-  loginHint: ''
+  loginHint: '',
+  taskDefaultStartTime: '09:00',
+  taskDefaultEndTime: '18:30'
 })
 
 const canSave = computed(() => hasBtnPermission('config:save'))
@@ -46,13 +48,25 @@ const saveConfig = async () => {
     ElMessage.error('浏览器标题后缀不能为空')
     return
   }
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/
+  if (!timePattern.test(form.value.taskDefaultStartTime || '') ||
+      !timePattern.test(form.value.taskDefaultEndTime || '')) {
+    ElMessage.error('任务默认时间格式必须为 HH:mm')
+    return
+  }
+  if (form.value.taskDefaultStartTime >= form.value.taskDefaultEndTime) {
+    ElMessage.error('默认开始时间必须早于默认截止时间')
+    return
+  }
   saving.value = true
   try {
     const result = await systemApi.updateConfig({
       systemName: form.value.systemName.trim(),
       systemSubName: form.value.systemSubName.trim(),
       browserTitle: form.value.browserTitle.trim(),
-      loginHint: form.value.loginHint.trim()
+      loginHint: form.value.loginHint.trim(),
+      taskDefaultStartTime: form.value.taskDefaultStartTime,
+      taskDefaultEndTime: form.value.taskDefaultEndTime
     })
     if (result.code === 1) {
       systemConfigStore.applyConfig(form.value)
@@ -74,7 +88,6 @@ onMounted(loadConfig)
     <div class="wk-page-head">
       <div>
         <h1 class="wk-page-title">系统信息</h1>
-        <p class="wk-page-desc">修改后会同步到工作台左上角、登录页说明和浏览器标题后缀。</p>
       </div>
       <div class="wk-page-actions">
         <el-button v-if="canSave" type="primary" :icon="Check" :loading="saving" @click="saveConfig">
@@ -84,45 +97,82 @@ onMounted(loadConfig)
     </div>
 
     <div class="general-grid">
-      <section v-loading="loading" class="wk-card form-card">
-        <div class="wk-panel-head">
-          <div>
-            <p class="wk-panel-title">基础信息</p>
-            <p class="wk-panel-sub">配置系统对用户可见的名称与说明</p>
-          </div>
-          <el-icon class="panel-icon" :size="18"><Monitor /></el-icon>
-        </div>
-
-        <el-form :model="form" label-position="top" class="config-form" hide-required-asterisk>
-          <div class="form-grid">
-            <el-form-item label="系统名称">
-              <el-input v-model="form.systemName" maxlength="30" show-word-limit placeholder="例如 Wokit" />
-            </el-form-item>
-            <el-form-item label="系统副标题">
-              <el-input v-model="form.systemSubName" maxlength="30" show-word-limit placeholder="例如 工作助手" />
-            </el-form-item>
+      <div class="general-main">
+        <section v-loading="loading" class="wk-card form-card">
+          <div class="wk-panel-head">
+            <div>
+              <p class="wk-panel-title">基础信息</p>
+              <p class="wk-panel-sub">配置系统对用户可见的名称与说明</p>
+            </div>
+            <el-icon class="panel-icon" :size="18"><Monitor /></el-icon>
           </div>
 
-          <el-form-item label="浏览器标题后缀">
-            <el-input
-              v-model="form.browserTitle"
-              maxlength="80"
-              show-word-limit
-              placeholder="页面标题会显示为「当前页面 · 后缀」"
-            />
-            <p class="field-tip">例如填写「Wokit 工作助手」，首页标签页会显示「首页 · Wokit 工作助手」。</p>
-          </el-form-item>
+          <el-form :model="form" label-position="top" class="config-form" hide-required-asterisk>
+            <div class="form-grid">
+              <el-form-item label="系统名称">
+                <el-input v-model="form.systemName" maxlength="30" show-word-limit placeholder="例如 Wokit" />
+              </el-form-item>
+              <el-form-item label="系统副标题">
+                <el-input v-model="form.systemSubName" maxlength="30" show-word-limit placeholder="例如 工作助手" />
+              </el-form-item>
+            </div>
 
-          <el-form-item label="登录页说明">
-            <el-input
-              v-model="form.loginHint"
-              maxlength="80"
-              show-word-limit
-              placeholder="登录表单上方的说明文字"
-            />
-          </el-form-item>
-        </el-form>
-      </section>
+            <el-form-item label="浏览器标题后缀">
+              <el-input
+                v-model="form.browserTitle"
+                maxlength="80"
+                show-word-limit
+                placeholder="页面标题会显示为「当前页面 · 后缀」"
+              />
+              <p class="field-tip">例如填写「Wokit 工作助手」，首页标签页会显示「首页 · Wokit 工作助手」。</p>
+            </el-form-item>
+
+            <el-form-item label="登录页说明">
+              <el-input
+                v-model="form.loginHint"
+                maxlength="80"
+                show-word-limit
+                placeholder="登录表单上方的说明文字"
+              />
+            </el-form-item>
+          </el-form>
+        </section>
+
+        <section v-loading="loading" class="wk-card form-card">
+          <div class="wk-panel-head">
+            <div>
+              <p class="wk-panel-title">任务默认时间</p>
+              <p class="wk-panel-sub">只配置新建任务时自动填充的时分，不保存日期</p>
+            </div>
+            <el-icon class="panel-icon" :size="18"><Timer /></el-icon>
+          </div>
+
+          <el-form :model="form" label-position="top" class="config-form" hide-required-asterisk>
+            <div class="form-grid">
+              <el-form-item label="默认开始时间">
+                <el-time-picker
+                  v-model="form.taskDefaultStartTime"
+                  format="HH:mm"
+                  value-format="HH:mm"
+                  :clearable="false"
+                  placeholder="09:00"
+                  style="width: 100%"
+                />
+              </el-form-item>
+              <el-form-item label="默认截止时间">
+                <el-time-picker
+                  v-model="form.taskDefaultEndTime"
+                  format="HH:mm"
+                  value-format="HH:mm"
+                  :clearable="false"
+                  placeholder="18:30"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </div>
+          </el-form>
+        </section>
+      </div>
 
       <aside class="preview-column">
         <section class="wk-card preview-card">
@@ -149,8 +199,6 @@ onMounted(loadConfig)
             <p class="preview-desc">{{ form.loginHint || '请输入登录页说明' }}</p>
           </div>
         </section>
-
-        <p class="preview-note">保存后立即生效，不需要重启服务。</p>
       </aside>
     </div>
   </section>
@@ -162,6 +210,13 @@ onMounted(loadConfig)
   grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.9fr);
   gap: 16px;
   align-items: start;
+}
+
+.general-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
 .form-card {
@@ -284,12 +339,6 @@ onMounted(loadConfig)
   color: var(--wk-text-2);
   font-size: 12px;
   line-height: 1.6;
-}
-
-.preview-note {
-  padding: 0 4px;
-  color: var(--wk-text-3);
-  font-size: 11.5px;
 }
 
 @media (max-width: 1100px) {

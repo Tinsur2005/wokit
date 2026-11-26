@@ -2,6 +2,7 @@ package cn.tinsur.wokit.exception;
 
 import cn.tinsur.wokit.util.Result;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -15,6 +16,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // 开放 API 认证/权限异常：保留 HTTP 状态码
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<Result> apiException(ApiException e) {
+        return ResponseEntity.status(e.getStatus()).body(Result.error(e.getMessage()));
+    }
 
     // 业务异常：代码里主动抛出，msg 就是给用户看的提示
     @ExceptionHandler(ServiceException.class)
