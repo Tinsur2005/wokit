@@ -16,6 +16,21 @@ public class TaskQuery {
     private Integer status;
 
     /**
+     * 任务类型（0：普通任务，1：项目任务）
+     */
+    private Integer taskKind;
+
+    /**
+     * 绑定项目ID，仅项目任务使用
+     */
+    private Long projectId;
+
+    /**
+     * 项目任务分类ID
+     */
+    private Long taskCategoryId;
+
+    /**
      * 截止日期（yyyy-MM-dd），按当日截止任务查询
      */
     private String date;

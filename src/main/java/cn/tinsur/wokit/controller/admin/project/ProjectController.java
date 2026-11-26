@@ -34,14 +34,17 @@ public class ProjectController {
     private IProjectService projectService;
 
     /**
-     * 查询项目列表，按创建时间倒序
-     * GET /admin/projects?categoryId=1&keyword=Wokit
+     * 查询项目列表，按创建时间倒序。
+     * GET /admin/projects?categoryId=1&keyword=Wokit&status=1&archived=false
      */
     @GetMapping
     public Result<List<ProjectVO>> list(@RequestParam(required = false) Long categoryId,
                                         @RequestParam(required = false) String keyword,
+                                        @RequestParam(required = false) Integer status,
+                                        @RequestParam(required = false) Boolean archived,
                                         HttpServletRequest request) {
-        return Result.ok(projectService.listByUser(AuthUtil.getUserId(request), categoryId, keyword));
+        return Result.ok(projectService.listByUser(
+                AuthUtil.getUserId(request), categoryId, keyword, status, archived));
     }
 
     /**
@@ -63,7 +66,38 @@ public class ProjectController {
     }
 
     /**
-     * 删除项目（真实删除，并解除业务记录绑定）
+     * 修改项目状态
+     * PUT /admin/projects/status/1?status=2
+     */
+    @PutMapping("/status/{id}")
+    public Result changeStatus(@PathVariable Long id,
+                               @RequestParam Integer status,
+                               HttpServletRequest request) {
+        return projectService.changeStatus(id, status, AuthUtil.getUserId(request));
+    }
+
+    /**
+     * 归档项目
+     * PUT /admin/projects/archive/1?reason=已交付，进入长期维护
+     */
+    @PutMapping("/archive/{id}")
+    public Result archive(@PathVariable Long id,
+                          @RequestParam(required = false) String reason,
+                          HttpServletRequest request) {
+        return projectService.archive(id, reason, AuthUtil.getUserId(request));
+    }
+
+    /**
+     * 恢复已归档项目
+     * PUT /admin/projects/restore/1
+     */
+    @PutMapping("/restore/{id}")
+    public Result restore(@PathVariable Long id, HttpServletRequest request) {
+        return projectService.restore(id, AuthUtil.getUserId(request));
+    }
+
+    /**
+     * 删除项目。存在关联任务、周报或工时时只能归档。
      * DELETE /admin/projects/1
      */
     @DeleteMapping("/{id}")

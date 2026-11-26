@@ -4,6 +4,7 @@ import cn.tinsur.wokit.exception.ServiceException;
 import cn.tinsur.wokit.mapper.MemoMapper;
 import cn.tinsur.wokit.mapper.ProjectCategoryMapper;
 import cn.tinsur.wokit.mapper.ProjectMapper;
+import cn.tinsur.wokit.mapper.TaskCategoryMapper;
 import cn.tinsur.wokit.mapper.TaskMapper;
 import cn.tinsur.wokit.mapper.TimerItemMapper;
 import cn.tinsur.wokit.mapper.WeeklyMapper;
@@ -13,10 +14,12 @@ import cn.tinsur.wokit.pojo.entity.Memo;
 import cn.tinsur.wokit.pojo.entity.Project;
 import cn.tinsur.wokit.pojo.entity.ProjectCategory;
 import cn.tinsur.wokit.pojo.entity.Task;
+import cn.tinsur.wokit.pojo.entity.TaskCategory;
 import cn.tinsur.wokit.pojo.entity.TimerItem;
 import cn.tinsur.wokit.pojo.entity.Weekly;
 import cn.tinsur.wokit.pojo.entity.WorkLog;
 import cn.tinsur.wokit.service.IUserDataService;
+import cn.tinsur.wokit.util.ProjectStatus;
 import cn.tinsur.wokit.util.Result;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -41,6 +44,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +71,9 @@ public class UserDataServiceImpl implements IUserDataService {
 
     @Autowired
     private TaskMapper taskMapper;
+
+    @Autowired
+    private TaskCategoryMapper taskCategoryMapper;
 
     @Autowired
     private MemoMapper memoMapper;
@@ -206,7 +213,22 @@ public class UserDataServiceImpl implements IUserDataService {
             task.setDeadline(old.getDeadline());
             task.setPriority(old.getPriority());
             task.setStatus(old.getStatus());
-            task.setProjectId(mapId(projectIdMap, old.getProjectId()));
+            Long mappedProjectId = mapId(projectIdMap, old.getProjectId());
+            task.setProjectId(mappedProjectId);
+            Integer taskKind = old.getTaskKind() == null
+                    ? (mappedProjectId == null ? 0 : 1) : old.getTaskKind();
+            task.setTaskKind(taskKind);
+            Long categoryId = old.getTaskCategoryId();
+            if (taskKind == 1 && categoryId == null) {
+                TaskCategory fallback = fallbackTaskCategory();
+                categoryId = fallback == null ? null : fallback.getId();
+            }
+            task.setTaskCategoryId(categoryId);
+            Date completedAt = old.getCompletedAt();
+            if (completedAt == null && old.getStatus() != null && old.getStatus() == 3) {
+                completedAt = old.getUpdateTime();
+            }
+            task.setCompletedAt(completedAt);
             taskMapper.insert(task);
         }
 
@@ -256,6 +278,21 @@ public class UserDataServiceImpl implements IUserDataService {
         }
     }
 
+    private TaskCategory fallbackTaskCategory() {
+        TaskCategory other = taskCategoryMapper.selectOne(
+                new LambdaQueryWrapper<TaskCategory>()
+                        .eq(TaskCategory::getName, "其他")
+                        .orderByAsc(TaskCategory::getSort)
+                        .last("LIMIT 1"));
+        if (other != null) {
+            return other;
+        }
+        return taskCategoryMapper.selectOne(new LambdaQueryWrapper<TaskCategory>()
+                .orderByAsc(TaskCategory::getSort)
+                .orderByAsc(TaskCategory::getId)
+                .last("LIMIT 1"));
+    }
+
     private Map<Long, Long> importCategories(List<ProjectCategory> categories, Long userId) {
         Map<Long, Long> idMap = new HashMap<>();
         for (ProjectCategory old : categories) {
@@ -292,6 +329,13 @@ public class UserDataServiceImpl implements IUserDataService {
             project.setUserId(userId);
             project.setCategoryId(mapId(categoryIdMap, old.getCategoryId()));
             project.setName(old.getName());
+            project.setStatus(old.getStatus() == null ? ProjectStatus.ACTIVE : old.getStatus());
+            project.setStatusChangedAt(old.getStatusChangedAt());
+            project.setReleasedAt(old.getReleasedAt());
+            project.setCompletedAt(old.getCompletedAt());
+            project.setArchivedAt(old.getArchivedAt());
+            project.setArchiveReason(old.getArchiveReason());
+            project.setStatusBeforeArchive(old.getStatusBeforeArchive());
             projectMapper.insert(project);
             if (old.getId() != null) {
                 idMap.put(old.getId(), project.getId());

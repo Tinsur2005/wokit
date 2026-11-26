@@ -2,15 +2,20 @@ package cn.tinsur.wokit.service.impl;
 
 import cn.tinsur.wokit.exception.ServiceException;
 import cn.tinsur.wokit.mapper.ProjectMapper;
+import cn.tinsur.wokit.mapper.TaskCategoryMapper;
 import cn.tinsur.wokit.mapper.TaskMapper;
 import cn.tinsur.wokit.pojo.entity.Project;
 import cn.tinsur.wokit.pojo.entity.Task;
+import cn.tinsur.wokit.pojo.entity.TaskCategory;
 import cn.tinsur.wokit.pojo.query.TaskQuery;
 import cn.tinsur.wokit.pojo.vo.CalendarDayVO;
 import cn.tinsur.wokit.pojo.vo.TaskStatVO;
+import cn.tinsur.wokit.service.ITaskCategoryService;
 import cn.tinsur.wokit.service.ITaskService;
+import cn.tinsur.wokit.util.ProjectStatus;
 import cn.tinsur.wokit.util.Result;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -40,12 +45,21 @@ import java.util.Map;
 @Service
 public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements ITaskService {
 
+    public static final int TASK_KIND_NORMAL = 0;
+    public static final int TASK_KIND_PROJECT = 1;
+
     private static final int STATUS_PENDING = 0;
     private static final int STATUS_DONE = 3;
     private static final int PRIORITY_NORMAL = 2;
 
     @Autowired
     private ProjectMapper projectMapper;
+
+    @Autowired
+    private TaskCategoryMapper taskCategoryMapper;
+
+    @Autowired
+    private ITaskCategoryService taskCategoryService;
 
     /**
      * 分页查询任务
@@ -62,7 +76,11 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
                         .like(Task::getTitle, taskQuery.getKeyword())
                         .or()
                         .like(Task::getDescription, taskQuery.getKeyword()))
-                .eq(!ObjectUtils.isEmpty(taskQuery.getStatus()), Task::getStatus, taskQuery.getStatus());
+                .eq(!ObjectUtils.isEmpty(taskQuery.getStatus()), Task::getStatus, taskQuery.getStatus())
+                .eq(!ObjectUtils.isEmpty(taskQuery.getTaskKind()), Task::getTaskKind, taskQuery.getTaskKind())
+                .eq(!ObjectUtils.isEmpty(taskQuery.getProjectId()), Task::getProjectId, taskQuery.getProjectId())
+                .eq(!ObjectUtils.isEmpty(taskQuery.getTaskCategoryId()),
+                        Task::getTaskCategoryId, taskQuery.getTaskCategoryId());
 
         // 筛选时间区间覆盖当天的任务
         if (!ObjectUtils.isEmpty(taskQuery.getDate())) {
@@ -176,13 +194,20 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         filterActiveOnDay(todayPendingWrapper, today);
         vo.setTodayPending(Math.toIntExact(count(todayPendingWrapper)));
 
-        // 本周完成数量：按更新时间统计，状态切换为已完成时刷新
+        // 本周完成数量：按实际完成时间统计
         LambdaQueryWrapper<Task> weekWrapper = new LambdaQueryWrapper<>();
         weekWrapper.eq(Task::getUserId, userId)
                 .eq(Task::getStatus, STATUS_DONE)
-                .ge(Task::getUpdateTime, startOfDay(weekStart))
-                .lt(Task::getUpdateTime, startOfDay(nextWeekStart));
+                .ge(Task::getCompletedAt, startOfDay(weekStart))
+                .lt(Task::getCompletedAt, startOfDay(nextWeekStart));
         vo.setWeekCompleted(Math.toIntExact(count(weekWrapper)));
+
+        // 本周任务总数：统计与本周有交集的唯一任务
+        LambdaQueryWrapper<Task> weekTotalWrapper = new LambdaQueryWrapper<>();
+        weekTotalWrapper.eq(Task::getUserId, userId)
+                .ge(Task::getDeadline, startOfDay(weekStart))
+                .lt(Task::getStartTime, startOfDay(nextWeekStart));
+        vo.setWeekTotal(Math.toIntExact(count(weekTotalWrapper)));
 
         // 本月任务总数与完成数：统计与本月有交集的唯一任务
         LambdaQueryWrapper<Task> monthWrapper = new LambdaQueryWrapper<>();
@@ -202,49 +227,115 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     }
 
     /**
-     * 新增任务
+     * 新增任务。普通任务不绑定项目；项目任务必须绑定项目和分类。
      */
     @Override
     public Result add(Task task, Long userId) {
         validateTask(task);
-        validateProject(task.getProjectId(), userId);
+        boolean legacyProjectTask = task.getTaskKind() == null && task.getProjectId() != null;
+        Integer taskKind = task.getTaskKind() == null
+                ? (legacyProjectTask ? TASK_KIND_PROJECT : TASK_KIND_NORMAL)
+                : task.getTaskKind();
+        if (taskKind != TASK_KIND_NORMAL && taskKind != TASK_KIND_PROJECT) {
+            throw new ServiceException("任务类型值不正确");
+        }
+
+        if (taskKind == TASK_KIND_NORMAL) {
+            if (task.getProjectId() != null || task.getTaskCategoryId() != null) {
+                throw new ServiceException("普通任务不能关联项目和任务分类");
+            }
+        } else {
+            if (task.getProjectId() == null) {
+                throw new ServiceException("项目任务必须选择项目");
+            }
+            validateProjectForCreate(task.getProjectId(), userId);
+            if (task.getTaskCategoryId() == null) {
+                if (!legacyProjectTask) {
+                    throw new ServiceException("项目任务必须选择任务分类");
+                }
+                TaskCategory fallback = taskCategoryService.fallbackCategory();
+                if (fallback == null) {
+                    throw new ServiceException("暂无可用的任务分类，请先在系统设置中创建");
+                }
+                task.setTaskCategoryId(fallback.getId());
+            }
+            validateCategory(task.getTaskCategoryId());
+            taskKind = TASK_KIND_PROJECT;
+        }
+
         task.setId(null);
         task.setUserId(userId);
+        task.setTaskKind(taskKind);
+        if (taskKind == TASK_KIND_NORMAL) {
+            task.setProjectId(null);
+            task.setTaskCategoryId(null);
+        }
         if (task.getPriority() == null) {
             task.setPriority(PRIORITY_NORMAL);
         }
         if (task.getStatus() == null) {
             task.setStatus(STATUS_PENDING);
         }
+        task.setCompletedAt(task.getStatus() == STATUS_DONE ? now() : null);
         save(task);
         return Result.ok("任务创建成功");
     }
 
     /**
-     * 修改任务
+     * 修改任务。任务类型、绑定项目和分类创建后不可变更。
      */
     @Override
     public Result update(Long id, Task task, Long userId) {
-        // 1.只允许修改自己的任务
         Task dbTask = getOwnTask(id, userId);
-        // 2.校验字段
         validateTask(task);
-        validateProject(task.getProjectId(), userId);
+
+        Integer incomingKind = task.getTaskKind();
+        if (incomingKind != null && !incomingKind.equals(dbTask.getTaskKind())) {
+            throw new ServiceException("任务类型创建后不可修改");
+        }
+        Long incomingProjectId = task.getProjectId();
+        if (incomingProjectId != null && !incomingProjectId.equals(dbTask.getProjectId())) {
+            throw new ServiceException("项目任务绑定项目创建后不可修改");
+        }
+        Long incomingCategoryId = task.getTaskCategoryId();
+        if (incomingCategoryId != null && !incomingCategoryId.equals(dbTask.getTaskCategoryId())) {
+            throw new ServiceException("项目任务分类创建后不可修改");
+        }
+        if (dbTask.getTaskKind() == TASK_KIND_NORMAL
+                && (incomingProjectId != null || incomingCategoryId != null)) {
+            throw new ServiceException("普通任务不能关联项目和任务分类");
+        }
+        if (dbTask.getTaskKind() == TASK_KIND_PROJECT) {
+            validateProjectExists(dbTask.getProjectId(), userId);
+            validateCategory(dbTask.getTaskCategoryId());
+        }
+
         task.setId(dbTask.getId());
         task.setUserId(userId);
-        // 未传优先级或状态时保留原值
+        task.setTaskKind(dbTask.getTaskKind());
+        task.setProjectId(dbTask.getProjectId());
+        task.setTaskCategoryId(dbTask.getTaskCategoryId());
         if (task.getPriority() == null) {
             task.setPriority(dbTask.getPriority());
         }
-        if (task.getStatus() == null) {
-            task.setStatus(dbTask.getStatus());
+        Integer newStatus = task.getStatus() == null ? dbTask.getStatus() : task.getStatus();
+        task.setStatus(newStatus);
+        if (newStatus == STATUS_DONE) {
+            task.setCompletedAt(dbTask.getCompletedAt() == null ? now() : dbTask.getCompletedAt());
+        } else {
+            task.setCompletedAt(null);
         }
         updateById(task);
+        if (newStatus != STATUS_DONE && dbTask.getCompletedAt() != null) {
+            update(null, new LambdaUpdateWrapper<Task>()
+                    .eq(Task::getId, dbTask.getId())
+                    .set(Task::getCompletedAt, null));
+        }
         return Result.ok("任务修改成功");
     }
 
     /**
-     * 切换任务状态
+     * 切换任务状态。完成时记录完成时间，重新打开时清除。
      */
     @Override
     public Result changeStatus(Long id, Integer status, Long userId) {
@@ -255,7 +346,15 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
         Task updateTask = new Task();
         updateTask.setId(dbTask.getId());
         updateTask.setStatus(status);
+        updateTask.setCompletedAt(status == STATUS_DONE
+                ? (dbTask.getCompletedAt() == null ? now() : dbTask.getCompletedAt())
+                : null);
         updateById(updateTask);
+        if (status != STATUS_DONE && dbTask.getCompletedAt() != null) {
+            update(null, new LambdaUpdateWrapper<Task>()
+                    .eq(Task::getId, dbTask.getId())
+                    .set(Task::getCompletedAt, null));
+        }
         return Result.ok(switch (status) {
             case 0 -> "任务已恢复为待处理";
             case 1 -> "任务已进入进行中";
@@ -296,15 +395,40 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
     }
 
     /**
-     * 校验绑定项目是否存在且属于当前用户；为空表示不绑定
+     * 新增项目任务时校验：项目属于当前用户、未归档且允许继续新增任务。
      */
-    private void validateProject(Long projectId, Long userId) {
+    private Project validateProjectForCreate(Long projectId, Long userId) {
+        Project project = validateProjectExists(projectId, userId);
+        if (project.getArchivedAt() != null) {
+            throw new ServiceException("项目已归档，请先恢复项目");
+        }
+        if (!ProjectStatus.canCreateTask(project.getStatus())) {
+            if (project.getStatus() != null && project.getStatus() == ProjectStatus.PAUSED) {
+                throw new ServiceException("项目已暂停，请先恢复为进行中");
+            }
+            throw new ServiceException("项目当前状态不允许新增任务");
+        }
+        return project;
+    }
+
+    private Project validateProjectExists(Long projectId, Long userId) {
         if (projectId == null) {
-            return;
+            throw new ServiceException("项目任务必须选择项目");
         }
         Project project = projectMapper.selectById(projectId);
         if (project == null || !project.getUserId().equals(userId)) {
             throw new ServiceException("绑定项目不存在或无权使用");
+        }
+        return project;
+    }
+
+    private void validateCategory(Long categoryId) {
+        if (categoryId == null) {
+            throw new ServiceException("项目任务必须选择任务分类");
+        }
+        TaskCategory category = taskCategoryMapper.selectById(categoryId);
+        if (category == null) {
+            throw new ServiceException("任务分类不存在或已被删除");
         }
     }
 
@@ -385,5 +509,9 @@ public class TaskServiceImpl extends ServiceImpl<TaskMapper, Task> implements IT
      */
     private LocalDate toLocalDate(Date date) {
         return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+    }
+
+    private Date now() {
+        return new Date();
     }
 }

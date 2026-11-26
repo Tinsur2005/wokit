@@ -70,10 +70,29 @@ public class Task implements Serializable {
     private Integer status;
 
     /**
-     * 绑定项目ID
+     * 任务类型（0：普通任务，1：项目任务）
+     */
+    @TableField("task_kind")
+    private Integer taskKind;
+
+    /**
+     * 绑定项目ID，仅项目任务使用
      */
     @TableField("project_id")
     private Long projectId;
+
+    /**
+     * 项目任务分类ID，创建后不可修改
+     */
+    @TableField("task_category_id")
+    private Long taskCategoryId;
+
+    /**
+     * 实际完成时间，用于周报和统计
+     */
+    @TableField("completed_at")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date completedAt;
 
     /**
      * 创建时间

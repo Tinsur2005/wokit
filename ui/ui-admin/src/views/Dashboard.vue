@@ -1,6 +1,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { AlarmClock, Calendar, CircleCheck, Clock } from '@element-plus/icons-vue'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  CircleCheck,
+  Clock,
+  DocumentChecked
+} from '@element-plus/icons-vue'
 import dashboardApi from '@/api/dashboard'
 import EChart from '@/components/EChart.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -27,7 +34,42 @@ const todayText = computed(() => {
 
 const monthHoursText = computed(() => Number(dashboard.value.monthHours || 0).toFixed(1))
 
+const WEEKEND_STORAGE_KEY = 'wokit.dashboard.showWeekend'
+const weekOffset = ref(0)
+const readWeekendPreference = () => {
+  try {
+    const value = localStorage.getItem(WEEKEND_STORAGE_KEY)
+    return value === null ? null : value === '1'
+  } catch {
+    return null
+  }
+}
+const weekendPreference = ref(readWeekendPreference())
+
 const taskTrend = computed(() => dashboard.value.taskTrend || [])
+const isWeekendPoint = (point) => {
+  const day = new Date(`${point.date}T00:00:00`).getDay()
+  return day === 0 || day === 6
+}
+const weekendHasTasks = computed(() =>
+  taskTrend.value.some((point) => isWeekendPoint(point)
+    && Number(point.created || 0) + Number(point.completed || 0) > 0)
+)
+const showWeekend = computed({
+  get: () => weekendPreference.value === null ? weekendHasTasks.value : weekendPreference.value,
+  set: (value) => {
+    weekendPreference.value = value
+    try {
+      localStorage.setItem(WEEKEND_STORAGE_KEY, value ? '1' : '0')
+    } catch {
+      // 本地存储不可用时只影响记忆，不影响本次显示
+    }
+  }
+})
+const visibleTaskTrend = computed(() =>
+  taskTrend.value.filter((point) => showWeekend.value || !isWeekendPoint(point))
+)
+
 const projectHours = computed(() => {
   const merged = new Map()
   for (const item of dashboard.value.projectHours || []) {
@@ -53,7 +95,10 @@ const escapeHtml = (value) => String(value)
   .replaceAll("'", '&#39;')
 
 const taskEmpty = computed(() =>
-  taskTrend.value.every((point) => Number(point.created || 0) === 0 && Number(point.completed || 0) === 0)
+  visibleTaskTrend.value.every((point) =>
+    Number(point.created || 0) === 0
+    && Number(point.total || 0) === 0
+    && Number(point.completed || 0) === 0)
 )
 const projectEmpty = computed(() => projectHours.value.length === 0)
 const weeklyEmpty = computed(() =>
@@ -61,9 +106,33 @@ const weeklyEmpty = computed(() =>
 )
 
 const taskTrendTotal = computed(() =>
-  taskTrend.value.reduce((sum, point) => sum + Number(point.completed || 0), 0)
+  visibleTaskTrend.value.reduce((sum, point) => sum + Number(point.completed || 0), 0)
 )
+const selectedWeekStart = computed(() => {
+  const base = new Date()
+  base.setHours(0, 0, 0, 0)
+  const mondayOffset = (base.getDay() + 6) % 7
+  base.setDate(base.getDate() - mondayOffset + weekOffset.value * 7)
+  return base
+})
+const formatMonthDay = (date) =>
+  `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+const weekRangeText = computed(() => {
+  const end = new Date(selectedWeekStart.value)
+  end.setDate(end.getDate() + 6)
+  return `${formatMonthDay(selectedWeekStart.value)} ~ ${formatMonthDay(end)}`
+})
+const weekOffsetLabel = computed(() => {
+  if (weekOffset.value === 0) return '本周'
+  if (weekOffset.value === -1) return '上周'
+  return `${Math.abs(weekOffset.value)} 周前`
+})
+const taskTrendSub = computed(() => `${weekOffsetLabel.value} · ${weekRangeText.value} · 完成 ${taskTrendTotal.value} 项`)
+const taskTrendEmptyText = computed(() => `${weekOffsetLabel.value}暂无任务记录`)
 const projectTotalText = computed(() => `共 ${projectHours.value.length} 个项目`)
+const projectHoursTotalText = computed(() =>
+  projectHours.value.reduce((sum, item) => sum + Number(item.hours || 0), 0).toFixed(1)
+)
 const weeklyThisWeek = computed(() => {
   const last = weeklyTrend.value[weeklyTrend.value.length - 1]
   return Number(last?.count || 0)
@@ -82,6 +151,9 @@ const tooltipStyle = {
   textStyle: { color: '#344054', fontSize: 12 },
   extraCssText: 'box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08); border-radius: 8px;'
 }
+
+const trendWeekday = (point) =>
+  ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date(`${point.date}T00:00:00`).getDay()]
 
 const taskTrendOption = computed(() => ({
   textStyle: chartTextStyle,
@@ -103,7 +175,7 @@ const taskTrendOption = computed(() => ({
   xAxis: {
     type: 'category',
     boundaryGap: false,
-    data: taskTrend.value.map((point) => point.label),
+    data: visibleTaskTrend.value.map((point) => trendWeekday(point)),
     axisLine: { lineStyle: { color: '#EAECF0' } },
     axisTick: { show: false },
     axisLabel: { color: '#98A2B3', fontSize: 11, margin: 10 }
@@ -117,26 +189,38 @@ const taskTrendOption = computed(() => ({
   },
   series: [
     {
-      name: '新增任务',
-      type: 'line',
-      smooth: 0.25,
-      showSymbol: false,
-      data: taskTrend.value.map((point) => Number(point.created || 0)),
-      lineStyle: { color: '#98A2B3', width: 1.5, type: 'dashed' },
-      itemStyle: { color: '#98A2B3' },
-      emphasis: { focus: 'series' }
-    },
-    {
       name: '完成任务',
       type: 'line',
       smooth: 0.25,
       showSymbol: true,
       symbol: 'circle',
       symbolSize: 5,
-      data: taskTrend.value.map((point) => Number(point.completed || 0)),
+      data: visibleTaskTrend.value.map((point) => Number(point.completed || 0)),
       lineStyle: { color: '#12B76A', width: 2 },
       itemStyle: { color: '#12B76A', borderColor: '#ffffff', borderWidth: 1 },
       areaStyle: { color: 'rgba(18, 183, 106, 0.10)' },
+      emphasis: { focus: 'series' }
+    },
+    {
+      name: '任务总数',
+      type: 'line',
+      smooth: 0.25,
+      showSymbol: true,
+      symbol: 'circle',
+      symbolSize: 5,
+      data: visibleTaskTrend.value.map((point) => Number(point.total || 0)),
+      lineStyle: { color: '#2E90FA', width: 1.5 },
+      itemStyle: { color: '#2E90FA', borderColor: '#ffffff', borderWidth: 1 },
+      emphasis: { focus: 'series' }
+    },
+    {
+      name: '新增任务',
+      type: 'line',
+      smooth: 0.25,
+      showSymbol: false,
+      data: visibleTaskTrend.value.map((point) => Number(point.created || 0)),
+      lineStyle: { color: '#98A2B3', width: 1.5, type: 'dashed' },
+      itemStyle: { color: '#98A2B3' },
       emphasis: { focus: 'series' }
     }
   ]
@@ -151,15 +235,6 @@ const projectHoursOption = computed(() => {
   return {
     textStyle: chartTextStyle,
     color: ['#12B76A', '#2E90FA', '#F79009', '#7C5CD6', '#14B8A6', '#98A2B3'],
-    title: {
-      text: `${monthHoursText.value}h`,
-      subtext: '本月工时',
-      left: compactLegend ? 'center' : '34%',
-      top: compactLegend ? '36%' : '33%',
-      itemGap: 3,
-      textStyle: { color: '#101828', fontSize: 20, fontWeight: 600 },
-      subtextStyle: { color: '#98A2B3', fontSize: 11 }
-    },
     tooltip: {
       trigger: 'item',
       ...tooltipStyle,
@@ -266,11 +341,21 @@ const weeklyTrendOption = computed(() => {
   }
 })
 
+const changeWeek = async (delta) => {
+  const next = weekOffset.value + delta
+  if (next > 0) return
+  weekOffset.value = next
+  await load()
+}
+
+let loadSeq = 0
 const load = async () => {
+  const seq = ++loadSeq
   loading.value = true
   loadFailed.value = false
   try {
-    const result = await dashboardApi.get()
+    const result = await dashboardApi.get({ weekOffset: weekOffset.value })
+    if (seq !== loadSeq) return
     if (result.code === 1 && result.data) {
       dashboard.value = {
         ...dashboard.value,
@@ -280,9 +365,13 @@ const load = async () => {
       loadFailed.value = true
     }
   } catch {
-    loadFailed.value = true
+    if (seq === loadSeq) {
+      loadFailed.value = true
+    }
   } finally {
-    loading.value = false
+    if (seq === loadSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -310,7 +399,7 @@ onMounted(load)
       <StatCard label="今日待办" :value="dashboard.todayPending" unit="项" tone="green" :icon="Calendar" />
       <StatCard label="本周完成" :value="dashboard.weekCompleted" unit="项" tone="blue" :icon="CircleCheck" />
       <StatCard label="本月工时" :value="monthHoursText" unit="h" tone="amber" :icon="Clock" />
-      <StatCard label="进行中计时" :value="dashboard.runningTimers" unit="个" tone="violet" :icon="AlarmClock" />
+      <StatCard label="本周周报" :value="weeklyThisWeek" unit="条" tone="violet" :icon="DocumentChecked" />
     </div>
 
     <div class="dash-grid">
@@ -318,9 +407,29 @@ onMounted(load)
         <div class="chart-head">
           <div>
             <h2 class="chart-title">任务完成趋势</h2>
-            <p class="chart-sub">近 7 天 · 完成 {{ taskTrendTotal }} 项</p>
+            <p class="chart-sub">{{ taskTrendSub }}</p>
           </div>
-          <span class="chart-badge">近 7 天</span>
+          <div class="chart-head-actions">
+            <el-checkbox v-model="showWeekend" size="small">显示周末</el-checkbox>
+            <div class="week-switcher">
+              <el-button
+                link
+                :icon="ArrowLeft"
+                size="small"
+                aria-label="上一周"
+                @click="changeWeek(-1)"
+              />
+              <span class="week-switch-label">{{ weekOffsetLabel }}</span>
+              <el-button
+                link
+                :icon="ArrowRight"
+                size="small"
+                aria-label="下一周"
+                :disabled="weekOffset >= 0"
+                @click="changeWeek(1)"
+              />
+            </div>
+          </div>
         </div>
         <div class="chart-body">
           <EChart
@@ -328,7 +437,7 @@ onMounted(load)
             height="var(--dash-chart-main)"
             :empty="taskEmpty && !loadFailed"
             :loading="loading"
-            empty-text="近 7 天暂无任务记录"
+            :empty-text="taskTrendEmptyText"
           />
         </div>
       </section>
@@ -336,18 +445,28 @@ onMounted(load)
       <section class="wk-card chart-card">
         <div class="chart-head">
           <div>
-            <h2 class="chart-title">本月工时构成</h2>
-            <p class="chart-sub">{{ projectTotalText }}</p>
+            <h2 class="chart-title">本周工时构成</h2>
+            <p class="chart-sub">本周 · {{ projectTotalText }}</p>
           </div>
         </div>
         <div class="chart-body">
-          <EChart
-            :option="projectHoursOption"
-            height="var(--dash-chart-main)"
-            :empty="projectEmpty && !loadFailed"
-            :loading="loading"
-            empty-text="本月还没有工时记录"
-          />
+          <div class="project-donut-wrap">
+            <EChart
+              :option="projectHoursOption"
+              height="var(--dash-chart-main)"
+              :empty="projectEmpty && !loadFailed"
+              :loading="loading"
+              empty-text="本周还没有工时记录"
+            />
+            <div
+              v-if="!projectEmpty && !loading && !loadFailed"
+              class="donut-center"
+              :class="{ 'is-compact': projectHours.length <= 2 }"
+            >
+              <strong>{{ projectHoursTotalText }}h</strong>
+              <span>本周工时</span>
+            </div>
+          </div>
         </div>
       </section>
     </div>
@@ -425,6 +544,38 @@ onMounted(load)
   font-size: 12px;
 }
 
+.chart-head-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 1px;
+}
+
+.chart-head-actions :deep(.el-checkbox__label) {
+  color: var(--wk-text-2);
+  font-size: 12px;
+}
+
+.week-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.week-switcher :deep(.el-button) {
+  margin: 0;
+}
+
+.week-switch-label {
+  min-width: 42px;
+  color: var(--wk-text-2);
+  font-size: 12px;
+  text-align: center;
+}
+
 .chart-badge {
   flex-shrink: 0;
   margin-top: 1px;
@@ -439,6 +590,43 @@ onMounted(load)
 
 .chart-body {
   padding: 2px 10px 10px;
+}
+
+.project-donut-wrap {
+  position: relative;
+}
+
+.donut-center {
+  position: absolute;
+  left: 34%;
+  top: 47%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.donut-center.is-compact {
+  left: 50%;
+  top: 44%;
+}
+
+.donut-center strong {
+  color: #101828;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.donut-center span {
+  color: #98a2b3;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .chart-card--weekly .chart-body {
@@ -464,6 +652,12 @@ onMounted(load)
 
   .chart-head {
     padding: 16px 16px 2px;
+  }
+
+  .chart-head-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
   }
 
   .chart-title {

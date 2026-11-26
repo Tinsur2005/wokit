@@ -35,8 +35,11 @@ public class OpenApiProjectController {
     @GetMapping
     public Result<List<ProjectVO>> list(@RequestParam(required = false) Long categoryId,
                                         @RequestParam(required = false) String keyword,
+                                        @RequestParam(required = false) Integer status,
+                                        @RequestParam(required = false) Boolean archived,
                                         HttpServletRequest request) {
-        return Result.ok(projectService.listByUser(ApiAuthUtil.getUserId(request), categoryId, keyword));
+        return Result.ok(projectService.listByUser(
+                ApiAuthUtil.getUserId(request), categoryId, keyword, status, archived));
     }
 
     @PostMapping
@@ -49,6 +52,28 @@ public class OpenApiProjectController {
     @RequirePermission("project:edit")
     public Result update(@PathVariable Long id, @RequestBody ProjectDTO dto, HttpServletRequest request) {
         return projectService.update(id, dto, ApiAuthUtil.getUserId(request));
+    }
+
+    @PutMapping("/status/{id}")
+    @RequirePermission("project:edit")
+    public Result changeStatus(@PathVariable Long id,
+                               @RequestParam Integer status,
+                               HttpServletRequest request) {
+        return projectService.changeStatus(id, status, ApiAuthUtil.getUserId(request));
+    }
+
+    @PutMapping("/archive/{id}")
+    @RequirePermission("project:archive")
+    public Result archive(@PathVariable Long id,
+                          @RequestParam(required = false) String reason,
+                          HttpServletRequest request) {
+        return projectService.archive(id, reason, ApiAuthUtil.getUserId(request));
+    }
+
+    @PutMapping("/restore/{id}")
+    @RequirePermission("project:restore")
+    public Result restore(@PathVariable Long id, HttpServletRequest request) {
+        return projectService.restore(id, ApiAuthUtil.getUserId(request));
     }
 
     @DeleteMapping("/{id}")

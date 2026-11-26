@@ -13,6 +13,15 @@ const projectApi = {
   remove(id) {
     return request.delete(`/projects/${id}`)
   },
+  changeStatus(id, status) {
+    return request.put(`/projects/status/${id}`, null, { params: { status } })
+  },
+  archive(id, reason) {
+    return request.put(`/projects/archive/${id}`, null, { params: { reason } })
+  },
+  restore(id) {
+    return request.put(`/projects/restore/${id}`)
+  },
   categories() {
     return request.get('/project-categories')
   },

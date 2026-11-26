@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -26,10 +27,11 @@ public class DashboardController {
 
     /**
      * 查询当前用户的首页数据看板
-     * GET /admin/dashboard
+     * GET /admin/dashboard?weekOffset=0
      */
     @GetMapping
-    public Result<DashboardVO> get(HttpServletRequest request) {
-        return Result.ok(dashboardService.get(AuthUtil.getUserId(request)));
+    public Result<DashboardVO> get(HttpServletRequest request,
+                                   @RequestParam(required = false, defaultValue = "0") Integer weekOffset) {
+        return Result.ok(dashboardService.get(AuthUtil.getUserId(request), weekOffset));
     }
 }

@@ -65,7 +65,8 @@ public class DashboardServiceImpl implements IDashboardService {
     private ProjectMapper projectMapper;
 
     @Override
-    public DashboardVO get(Long userId) {
+    public DashboardVO get(Long userId, Integer weekOffset) {
+        int safeWeekOffset = weekOffset == null ? 0 : Math.min(weekOffset, 0);
         LocalDate today = LocalDate.now();
         LocalDate todayStart = today;
         LocalDate tomorrow = today.plusDays(1);
@@ -80,8 +81,8 @@ public class DashboardServiceImpl implements IDashboardService {
         dashboardVO.setWeekCompleted(countCompletedTask(userId, weekStart, nextWeekStart));
         dashboardVO.setMonthHours(sumMonthHours(userId, monthStart, nextMonthStart));
         dashboardVO.setRunningTimers(countRunningTimers(userId, today));
-        dashboardVO.setTaskTrend(buildTaskTrend(userId, today));
-        dashboardVO.setProjectHours(buildProjectHours(userId, monthStart, nextMonthStart));
+        dashboardVO.setTaskTrend(buildTaskTrend(userId, weekStart, safeWeekOffset));
+        dashboardVO.setProjectHours(buildProjectHours(userId, weekStart, nextWeekStart));
         dashboardVO.setWeeklyTrend(buildWeeklyTrend(userId, weekStart));
         return dashboardVO;
     }
@@ -115,8 +116,8 @@ public class DashboardServiceImpl implements IDashboardService {
         return taskMapper.selectCount(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
                 .eq(Task::getStatus, TASK_STATUS_DONE)
-                .ge(Task::getUpdateTime, startOfDay(start))
-                .lt(Task::getUpdateTime, startOfDay(end))).intValue();
+                .ge(Task::getCompletedAt, startOfDay(start))
+                .lt(Task::getCompletedAt, startOfDay(end))).intValue();
     }
 
     /**
@@ -155,11 +156,11 @@ public class DashboardServiceImpl implements IDashboardService {
     }
 
     /**
-     * 近 7 天任务新增与完成趋势
+     * 指定周的任务新增与完成趋势，周一至周日
      */
-    private List<TrendPointVO> buildTaskTrend(Long userId, LocalDate today) {
-        LocalDate start = today.minusDays(6);
-        LocalDate end = today.plusDays(1);
+    private List<TrendPointVO> buildTaskTrend(Long userId, LocalDate currentWeekStart, int weekOffset) {
+        LocalDate start = currentWeekStart.plusWeeks(weekOffset);
+        LocalDate end = start.plusWeeks(1);
 
         List<Task> createdTasks = taskMapper.selectList(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
@@ -168,21 +169,32 @@ public class DashboardServiceImpl implements IDashboardService {
         List<Task> completedTasks = taskMapper.selectList(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
                 .eq(Task::getStatus, TASK_STATUS_DONE)
-                .ge(Task::getUpdateTime, startOfDay(start))
-                .lt(Task::getUpdateTime, startOfDay(end)));
+                .ge(Task::getCompletedAt, startOfDay(start))
+                .lt(Task::getCompletedAt, startOfDay(end)));
+        List<Task> dailyTasks = taskMapper.selectList(new LambdaQueryWrapper<Task>()
+                .eq(Task::getUserId, userId)
+                .ge(Task::getDeadline, startOfDay(start))
+                .lt(Task::getStartTime, startOfDay(end)));
 
         Map<LocalDate, Long> createdMap = createdTasks.stream()
                 .collect(Collectors.groupingBy(task -> toLocalDate(task.getCreateTime()), Collectors.counting()));
         Map<LocalDate, Long> completedMap = completedTasks.stream()
-                .collect(Collectors.groupingBy(task -> toLocalDate(task.getUpdateTime()), Collectors.counting()));
+                .collect(Collectors.groupingBy(task -> toLocalDate(task.getCompletedAt()), Collectors.counting()));
 
         List<TrendPointVO> points = new ArrayList<>();
         for (int i = 0; i < 7; i++) {
             LocalDate day = start.plusDays(i);
+            Date dayStart = startOfDay(day);
+            Date nextDayStart = startOfDay(day.plusDays(1));
+            int total = (int) dailyTasks.stream()
+                    .filter(task -> task.getDeadline() != null && task.getStartTime() != null)
+                    .filter(task -> !task.getDeadline().before(dayStart) && task.getStartTime().before(nextDayStart))
+                    .count();
             TrendPointVO point = new TrendPointVO();
             point.setDate(day.format(DATE_FORMATTER));
             point.setLabel(day.format(SHORT_FORMATTER));
             point.setCreated(createdMap.getOrDefault(day, 0L).intValue());
+            point.setTotal(total);
             point.setCompleted(completedMap.getOrDefault(day, 0L).intValue());
             points.add(point);
         }
@@ -190,7 +202,7 @@ public class DashboardServiceImpl implements IDashboardService {
     }
 
     /**
-     * 本月项目工时分布，最多保留 6 项，其余合并为「其他」
+     * 本周项目工时分布，最多保留 6 项，其余合并为「其他」
      */
     private List<ProjectHourVO> buildProjectHours(Long userId, LocalDate start, LocalDate end) {
         List<WorkLog> workLogs = workLogMapper.selectList(new LambdaQueryWrapper<WorkLog>()

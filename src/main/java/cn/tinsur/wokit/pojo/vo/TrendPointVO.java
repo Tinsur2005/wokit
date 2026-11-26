@@ -26,6 +26,11 @@ public class TrendPointVO {
     private Integer created;
 
     /**
+     * 当天任务总数（截止日覆盖当天且当天已开始）
+     */
+    private Integer total;
+
+    /**
      * 当天完成任务数
      */
     private Integer completed;

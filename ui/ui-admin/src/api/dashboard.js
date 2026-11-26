@@ -1,8 +1,8 @@
 import request from '@/utils/request'
 
 const dashboardApi = {
-  get() {
-    return request.get('/dashboard')
+  get(params) {
+    return request.get('/dashboard', { params })
   }
 }
 

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
@@ -15,12 +16,12 @@ import {
 } from '@element-plus/icons-vue'
 import taskApi from '@/api/task'
 import weeklyApi from '@/api/weekly'
-import ProjectPicker from '@/components/ProjectPicker.vue'
 import StatCard from '@/components/StatCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import WeeklyCreateDialog from '@/components/WeeklyCreateDialog.vue'
 import { useProjectStore } from '@/store/project'
 import { useSystemConfigStore } from '@/store/systemConfig'
+import { useTaskCategoryStore } from '@/store/taskCategory'
 import hasBtnPermission from '@/utils/btnPermission'
 
 const pad = (num) => String(num).padStart(2, '0')
@@ -43,12 +44,14 @@ const weekStartOf = (value) => {
 const selectedDate = ref(todayStr)
 const viewMonth = ref(todayStr.slice(0, 7))
 const systemConfigStore = useSystemConfigStore()
+const route = useRoute()
 const tasks = ref([])
 const marks = ref([])
 const stat = ref({
   todayPending: 0,
   todayTotal: 0,
   weekCompleted: 0,
+  weekTotal: 0,
   monthTotal: 0,
   monthCompleted: 0
 })
@@ -58,9 +61,8 @@ const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const editingId = ref(null)
 const formRef = ref()
-const projectPickerRef = ref()
-const projectBound = ref(false)
 const submitting = ref(false)
+const taskKindFilter = ref('all')
 const weeklyDialogVisible = ref(false)
 const weeklySubmitting = ref(false)
 const pendingCompleteTask = ref(null)
@@ -77,10 +79,13 @@ const form = ref({
   status: 0,
   startTime: '',
   deadline: '',
-  projectId: null
+  taskKind: 0,
+  projectId: null,
+  taskCategoryId: null
 })
 
 const projectStore = useProjectStore()
+const taskCategoryStore = useTaskCategoryStore()
 
 const priorityOptions = [
   { value: 0, label: '紧急', tone: 'urgent' },
@@ -100,6 +105,45 @@ const priorityMap = Object.fromEntries(priorityOptions.map((item) => [item.value
 const statusMap = Object.fromEntries(statusOptions.map((item) => [item.value, item]))
 const getPriority = (value) => priorityMap[value] || priorityMap[2]
 const getStatus = (value) => statusMap[value] || statusMap[0]
+
+const taskKindOptions = [
+  { value: 0, label: '普通任务', hint: '不关联项目，记录日常事项' },
+  { value: 1, label: '项目任务', hint: '必须绑定项目和任务分类' }
+]
+
+const taskKindFilters = [
+  { value: 'all', label: '全部' },
+  { value: 0, label: '普通' },
+  { value: 1, label: '项目' }
+]
+
+const isProjectTask = (task) => Number(task.taskKind) === 1
+
+const availableProjects = computed(() =>
+  [...projectStore.projects]
+    .filter((project) => !project.archived)
+    .sort((a, b) => {
+      const timeCompare = String(b.createTime || '').localeCompare(String(a.createTime || ''))
+      return timeCompare || Number(b.id) - Number(a.id)
+    })
+)
+
+const canSelectProject = (project) => [0, 1, 2].includes(Number(project.status ?? 1))
+
+const hasSelectableProject = computed(() =>
+  availableProjects.value.some((project) => canSelectProject(project))
+)
+
+const taskKindCounts = computed(() => ({
+  all: tasks.value.length,
+  0: tasks.value.filter((task) => !isProjectTask(task)).length,
+  1: tasks.value.filter((task) => isProjectTask(task)).length
+}))
+
+const visibleTasks = computed(() => {
+  if (taskKindFilter.value === 'all') return tasks.value
+  return tasks.value.filter((task) => Number(task.taskKind) === Number(taskKindFilter.value))
+})
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -145,8 +189,8 @@ const isDueToday = (task) => Boolean(task.deadline && task.deadline.slice(0, 10)
 const pendingCount = computed(() => tasks.value.filter((task) => !isDone(task)).length)
 
 const completionRate = computed(() => {
-  if (!stat.value.monthTotal) return 0
-  return Math.round((stat.value.monthCompleted / stat.value.monthTotal) * 100)
+  if (!stat.value.weekTotal) return 0
+  return Math.round((stat.value.weekCompleted / stat.value.weekTotal) * 100)
 })
 
 const rules = {
@@ -237,9 +281,9 @@ const handleStartChange = () => {
   formRef.value.validateField('deadline').catch(() => {})
 }
 
-const openCreate = () => {  dialogMode.value = 'create'
+const openCreate = (prefill = {}) => {
+  dialogMode.value = 'create'
   editingId.value = null
-  projectBound.value = false
   const defaultStartTime = normalizeTaskTime(systemConfigStore.taskDefaultStartTime, '09:00')
   const defaultEndTime = normalizeTaskTime(systemConfigStore.taskDefaultEndTime, '18:30')
   form.value = {
@@ -249,7 +293,9 @@ const openCreate = () => {  dialogMode.value = 'create'
     status: 0,
     startTime: `${selectedDate.value} ${defaultStartTime}:00`,
     deadline: `${selectedDate.value} ${defaultEndTime}:00`,
-    projectId: null
+    taskKind: Number(prefill.taskKind) === 1 ? 1 : 0,
+    projectId: prefill.projectId ? Number(prefill.projectId) : null,
+    taskCategoryId: null
   }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
@@ -258,7 +304,6 @@ const openCreate = () => {  dialogMode.value = 'create'
 const openEdit = (task) => {
   dialogMode.value = 'edit'
   editingId.value = task.id
-  projectBound.value = Boolean(task.projectId)
   form.value = {
     title: task.title,
     description: task.description || '',
@@ -266,15 +311,33 @@ const openEdit = (task) => {
     status: task.status ?? 0,
     startTime: task.startTime,
     deadline: task.deadline,
-    projectId: task.projectId || null
+    taskKind: Number(task.taskKind) === 1 ? 1 : 0,
+    projectId: task.projectId || null,
+    taskCategoryId: task.taskCategoryId || null
   }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
 }
 
+const handleTaskKindChange = (value) => {
+  if (Number(value) === 0) {
+    form.value.projectId = null
+    form.value.taskCategoryId = null
+  }
+}
+
 const submitTask = async () => {
   if (!formRef.value || submitting.value) return
-  if (!projectPickerRef.value?.validate()) return
+  if (form.value.taskKind === 1) {
+    if (!form.value.projectId) {
+      ElMessage.warning('项目任务必须选择项目')
+      return
+    }
+    if (!form.value.taskCategoryId) {
+      ElMessage.warning('项目任务必须选择任务分类')
+      return
+    }
+  }
   await formRef.value.validate()
   submitting.value = true
   try {
@@ -285,7 +348,9 @@ const submitTask = async () => {
       status: form.value.status,
       startTime: form.value.startTime,
       deadline: form.value.deadline,
-      projectId: form.value.projectId || null
+      taskKind: form.value.taskKind,
+      projectId: form.value.taskKind === 1 ? form.value.projectId : null,
+      taskCategoryId: form.value.taskKind === 1 ? form.value.taskCategoryId : null
     }
     const result = editingId.value
       ? await taskApi.update(editingId.value, payload)
@@ -422,9 +487,13 @@ const isOverdue = (task) => {
   return new Date(task.deadline.replace(/-/g, '/')).getTime() < Date.now()
 }
 
-onMounted(() => {
-  projectStore.load()
-  refreshAll()
+onMounted(async () => {
+  await Promise.all([projectStore.load(), taskCategoryStore.load()])
+  await refreshAll()
+  const queryProjectId = Number(route.query.projectId || 0)
+  if (queryProjectId && route.query.create === '1') {
+    openCreate({ taskKind: 1, projectId: queryProjectId })
+  }
 })
 </script>
 
@@ -456,18 +525,18 @@ onMounted(() => {
         :icon="CircleCheck"
       />
       <StatCard
+        label="本周完成率"
+        :value="completionRate"
+        unit="%"
+        tone="violet"
+        :icon="TrendCharts"
+      />
+      <StatCard
         label="本月任务"
         :value="stat.monthTotal"
         unit="项"
         tone="amber"
         :icon="Calendar"
-      />
-      <StatCard
-        label="本月完成率"
-        :value="completionRate"
-        unit="%"
-        tone="violet"
-        :icon="TrendCharts"
       />
     </div>
 
@@ -543,10 +612,24 @@ onMounted(() => {
           </el-tooltip>
         </div>
 
+        <div class="task-kind-tabs" role="tablist" aria-label="任务类型筛选">
+          <button
+            v-for="item in taskKindFilters"
+            :key="item.value"
+            type="button"
+            class="task-kind-tab"
+            :class="{ 'is-active': taskKindFilter === item.value }"
+            @click="taskKindFilter = item.value"
+          >
+            <span>{{ item.label }}</span>
+            <em>{{ taskKindCounts[item.value] }}</em>
+          </button>
+        </div>
+
         <div class="task-list" v-loading="loadingTasks">
-          <template v-if="tasks.length">
+          <template v-if="visibleTasks.length">
             <article
-              v-for="task in tasks"
+              v-for="task in visibleTasks"
               :key="task.id"
               class="task-row"
               :class="[isDone(task) ? 'is-done' : '', 'priority-' + getPriority(task.priority).tone]"
@@ -602,10 +685,10 @@ onMounted(() => {
                 </div>
                 <p v-if="task.description" class="task-desc">{{ task.description }}</p>
                 <div class="task-meta">
-                  <span v-if="projectStore.projectName(task.projectId)" class="task-project">
+                  <span v-if="isProjectTask(task) && projectStore.projectName(task.projectId)" class="task-project">
                     {{ projectStore.projectName(task.projectId) }}
                   </span>
-                  <span v-if="projectStore.projectName(task.projectId)" class="meta-sep">·</span>
+                  <span v-if="isProjectTask(task) && projectStore.projectName(task.projectId)" class="meta-sep">·</span>
                   <span class="time">{{ timeRange(task) }}</span>
                   <span class="meta-sep">·</span>
                   <el-dropdown
@@ -662,7 +745,7 @@ onMounted(() => {
 
           <EmptyState
             v-else
-            title="当日暂无任务"
+            :title="taskKindFilter === 'all' ? '当日暂无任务' : `当日暂无${taskKindFilter === 0 ? '普通' : '项目'}任务`"
             hint="点击右上角的加号，安排这一天的第一件事。"
           />
         </div>
@@ -695,11 +778,77 @@ onMounted(() => {
             placeholder="补充任务背景、验收标准或注意事项（选填）"
           />
         </el-form-item>
-        <ProjectPicker
-          ref="projectPickerRef"
-          v-model="form.projectId"
-          v-model:bound="projectBound"
-        />
+        <el-form-item label="任务类型" prop="taskKind">
+          <el-select
+            v-model="form.taskKind"
+            placeholder="选择任务类型"
+            style="width: 100%"
+            :disabled="dialogMode === 'edit'"
+            @change="handleTaskKindChange"
+          >
+            <el-option
+              v-for="item in taskKindOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            >
+              <span>{{ item.label }}</span>
+              <span class="task-kind-option-hint">{{ item.hint }}</span>
+            </el-option>
+          </el-select>
+          <p class="dialog-hint-soft">
+            {{ dialogMode === 'edit' ? '任务类型创建后不可修改。' : '普通任务不关联项目；项目任务必须绑定项目和分类。' }}
+          </p>
+        </el-form-item>
+        <div v-if="form.taskKind === 1" class="task-project-grid">
+          <el-form-item label="所属项目" required>
+            <el-select
+              v-model="form.projectId"
+              filterable
+              placeholder="选择项目"
+              style="width: 100%"
+              :disabled="dialogMode === 'edit'"
+              no-data-text="没有可添加任务的项目"
+            >
+              <el-option
+                v-for="project in availableProjects"
+                :key="project.id"
+                :label="project.name"
+                :value="project.id"
+                :disabled="!canSelectProject(project)"
+              >
+                <span>{{ project.name }}</span>
+                <span class="task-kind-option-hint">{{ project.statusName }}</span>
+              </el-option>
+            </el-select>
+            <p v-if="!hasSelectableProject" class="dialog-hint-soft">
+              暂无进行中、维护中或规划中的项目，请先到项目管理创建或恢复项目。
+            </p>
+          </el-form-item>
+          <el-form-item label="任务分类" required>
+            <el-select
+              v-model="form.taskCategoryId"
+              filterable
+              placeholder="选择分类"
+              style="width: 100%"
+              :disabled="dialogMode === 'edit'"
+              no-data-text="还没有任务分类，请先到系统设置创建"
+            >
+              <el-option
+                v-for="category in taskCategoryStore.categories"
+                :key="category.id"
+                :label="category.name"
+                :value="category.id"
+              >
+                <span class="task-category-dot" :style="{ backgroundColor: category.color }"></span>
+                <span>{{ category.name }}</span>
+              </el-option>
+            </el-select>
+          </el-form-item>
+        </div>
+        <p v-if="dialogMode === 'edit' && form.taskKind === 1" class="dialog-hint-soft task-lock-hint">
+          项目任务创建后，任务类型、项目和分类均不可修改。
+        </p>
         <div class="task-attr-grid">
           <el-form-item label="优先级" prop="priority">
             <el-select v-model="form.priority" placeholder="选择优先级" style="width: 100%">
@@ -999,6 +1148,81 @@ onMounted(() => {
 
 .day-add:hover {
   background: var(--wk-primary-hover);
+}
+
+.task-kind-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 22px 0;
+  padding: 3px;
+  border-radius: 9px;
+  background: #f4f6f8;
+  width: fit-content;
+}
+
+.task-kind-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #667085;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.task-kind-tab em {
+  min-width: 17px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: rgba(16, 24, 40, 0.05);
+  color: #98a2b3;
+  font-size: 10.5px;
+  font-style: normal;
+  line-height: 16px;
+  text-align: center;
+}
+
+.task-kind-tab.is-active {
+  background: #fff;
+  color: var(--wk-text);
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+}
+
+.task-kind-tab.is-active em {
+  background: var(--wk-primary-soft);
+  color: #0b8b4f;
+}
+
+.task-project-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.task-lock-hint {
+  margin: -2px 0 14px;
+}
+
+.task-kind-option-hint {
+  margin-left: 8px;
+  color: var(--wk-text-3);
+  font-size: 11.5px;
+}
+
+.task-category-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: 1px;
 }
 
 .task-list {
@@ -1351,6 +1575,15 @@ onMounted(() => {
 
   .task-list {
     padding: 2px 16px 14px;
+  }
+
+  .task-kind-tabs {
+    margin: 8px 16px 0;
+  }
+
+  .task-project-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 
   .task-ops {

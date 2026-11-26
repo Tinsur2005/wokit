@@ -26,6 +26,11 @@ public class TaskStatVO {
     private Integer weekCompleted;
 
     /**
+     * 本周任务总数
+     */
+    private Integer weekTotal;
+
+    /**
      * 本月任务总数
      */
     private Integer monthTotal;

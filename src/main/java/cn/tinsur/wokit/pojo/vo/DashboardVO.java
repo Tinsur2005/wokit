@@ -39,12 +39,12 @@ public class DashboardVO {
     private Integer runningTimers;
 
     /**
-     * 近 7 天任务趋势
+     * 指定周（默认本周）的任务趋势，周一至周日
      */
     private List<TrendPointVO> taskTrend;
 
     /**
-     * 本月工时项目分布
+     * 本周工时项目分布
      */
     private List<ProjectHourVO> projectHours;
 

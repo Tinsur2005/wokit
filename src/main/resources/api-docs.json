@@ -160,6 +160,9 @@
           "summary": "获取首页看板数据",
           "auth": "Bearer Token",
           "permission": "有效 Token",
+          "query": [
+            {"name": "weekOffset", "type": "int", "required": false, "description": "任务趋势查看周偏移：0 本周、-1 上周，依此类推；不允许未来周"}
+          ],
           "response": {
             "code": 1,
             "data": {
@@ -171,14 +174,14 @@
               "weeklyTrend": []
             }
           },
-          "notes": "字段以实际返回为准，公式和统计口径与网页端首页一致。"
+          "notes": "taskTrend 返回指定周周一至周日 7 天数据，每天包含 created 新增、total 当日任务总数、completed 当日完成；projectHours 为本周工时分布；其他统计仍按当前时间口径。"
         }
       ]
     },
     {
       "name": "每日任务",
       "key": "tasks",
-      "description": "任务状态：0 待处理、1 进行中、2 阻塞中、3 已完成；优先级：0 紧急、1 重要、2 普通、3 低优先级。",
+      "description": "任务类型：0 普通任务、1 项目任务；普通任务不关联项目；项目任务必须传 projectId 和 taskCategoryId。任务类型、绑定项目和分类创建后不可修改。状态：0 待处理、1 进行中、2 阻塞中、3 已完成；优先级：0 紧急、1 重要、2 普通、3 低优先级。",
       "endpoints": [
         {
           "method": "GET",
@@ -192,13 +195,15 @@
             {"name": "keyword", "type": "string", "required": false, "description": "标题/描述关键字"},
             {"name": "status", "type": "int", "required": false, "description": "任务状态"},
             {"name": "date", "type": "string", "required": false, "description": "日期，格式 yyyy-MM-dd"},
-            {"name": "projectId", "type": "long", "required": false, "description": "项目 ID"}
+            {"name": "taskKind", "type": "int", "required": false, "description": "任务类型：0 普通任务 / 1 项目任务"},
+            {"name": "projectId", "type": "long", "required": false, "description": "项目 ID，仅项目任务"},
+            {"name": "taskCategoryId", "type": "long", "required": false, "description": "任务分类 ID，仅项目任务"}
           ],
           "response": {
             "code": 1,
             "data": {
               "records": [
-                {"id": 1, "title": "完成接口联调", "description": "验证登录与任务接口", "priority": 1, "status": 1, "startTime": "2026-11-26 09:30:00", "deadline": "2026-11-26 11:00:00", "projectId": null}
+                {"id": 1, "title": "完成接口联调", "description": "验证登录与任务接口", "priority": 1, "status": 1, "startTime": "2026-11-26 09:30:00", "deadline": "2026-11-26 11:00:00", "taskKind": 1, "projectId": 2, "taskCategoryId": 1, "completedAt": null}
               ],
               "total": 1, "size": 10, "current": 1, "pages": 1
             }
@@ -228,7 +233,7 @@
           "summary": "任务统计卡片",
           "auth": "Bearer Token",
           "permission": "有效 Token",
-          "response": {"code": 1, "data": {"total": 8, "pending": 3, "doing": 2, "blocked": 0, "done": 3, "today": 4}}
+          "response": {"code": 1, "data": {"todayPending": 1, "todayTotal": 3, "weekCompleted": 2, "weekTotal": 5, "monthTotal": 3, "monthCompleted": 1}}
         },
         {
           "method": "GET",
@@ -251,9 +256,12 @@
             "priority": 1,
             "startTime": "2026-11-26 09:30:00",
             "deadline": "2026-11-26 11:00:00",
-            "projectId": null
+            "taskKind": 0,
+            "projectId": null,
+            "taskCategoryId": null
           },
-          "response": {"code": 1, "msg": "新增成功", "data": null}
+          "response": {"code": 1, "msg": "新增成功", "data": null},
+          "notes": "任务类型不传时默认普通任务。兼容旧调用：只传 projectId、不传 taskKind 时按项目任务处理，并自动取「其他」分类。"
         },
         {
           "method": "PUT",
@@ -262,8 +270,9 @@
           "auth": "Bearer Token",
           "permission": "task:edit",
           "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "任务 ID"}],
-          "body": {"title": "完成接口联调", "description": "补充移动端", "priority": 0, "startTime": "2026-11-26 09:30:00", "deadline": "2026-11-26 12:00:00", "projectId": null},
-          "response": {"code": 1, "msg": "修改成功", "data": null}
+          "body": {"title": "完成接口联调", "description": "补充移动端", "priority": 0, "startTime": "2026-11-26 09:30:00", "deadline": "2026-11-26 12:00:00", "taskKind": 1, "projectId": 2, "taskCategoryId": 1},
+          "response": {"code": 1, "msg": "修改成功", "data": null},
+          "notes": "taskKind、projectId、taskCategoryId 创建后不可修改；传入不同值会返回业务校验失败。"
         },
         {
           "method": "PUT",
@@ -293,6 +302,22 @@
           "permission": "task:delete",
           "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "任务 ID"}],
           "response": {"code": 1, "msg": "删除成功", "data": null}
+        }
+      ]
+    },
+    {
+      "name": "任务分类",
+      "key": "task-categories",
+      "description": "项目任务分类由管理员在网页端「系统设置 / 任务分类」统一维护。已被任务使用的分类只能修改，未被使用的分类可以删除。",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/task-categories",
+          "summary": "查询任务分类",
+          "auth": "Bearer Token",
+          "permission": "有效 Token",
+          "response": {"code": 1, "data": [{"id": 1, "name": "新需求", "color": "#1677ff", "sort": 1, "usageCount": 12}]},
+          "notes": "创建项目任务时把返回的 id 作为 taskCategoryId。"
         }
       ]
     },
@@ -498,7 +523,7 @@
     {
       "name": "项目",
       "key": "projects",
-      "description": "项目按创建时间倒序，支持关键字和分类筛选。",
+      "description": "项目按创建时间倒序。状态：0 规划中、1 进行中、2 维护中、3 暂停、4 已完成、5 已取消。归档是独立字段，不是状态；archived=true 查询已归档项目。taskOpen 和 taskTotal 实时统计 taskKind=1 的项目任务，不存冗余计数字段。",
       "endpoints": [
         {
           "method": "GET",
@@ -508,9 +533,11 @@
           "permission": "有效 Token",
           "query": [
             {"name": "categoryId", "type": "long", "required": false, "description": "分类 ID"},
-            {"name": "keyword", "type": "string", "required": false, "description": "项目名称关键字"}
+            {"name": "keyword", "type": "string", "required": false, "description": "项目名称关键字"},
+            {"name": "status", "type": "int", "required": false, "description": "项目状态"},
+            {"name": "archived", "type": "boolean", "required": false, "description": "true 查询已归档；默认 false 查询当前项目"}
           ],
-          "response": {"code": 1, "data": [{"id": 1, "name": "Wokit 工作助手", "categoryId": 1, "categoryName": "个人项目"}]}
+          "response": {"code": 1, "data": [{"id": 1, "name": "Wokit 工作助手", "categoryId": 1, "categoryName": "个人项目", "status": 2, "statusName": "维护中", "archived": false, "taskTotal": 12, "taskOpen": 5, "taskDone": 7}]}
         },
         {
           "method": "POST",
@@ -528,8 +555,41 @@
           "auth": "Bearer Token",
           "permission": "project:edit",
           "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "项目 ID"}],
-          "body": {"name": "Wokit 工作助手", "categoryId": 1},
-          "response": {"code": 1, "msg": "修改成功", "data": null}
+          "body": {"name": "Wokit 工作助手", "categoryId": 1, "status": 2},
+          "response": {"code": 1, "msg": "修改成功", "data": null},
+          "notes": "编辑项目时可以同时修改业务状态；已归档项目必须先恢复才能编辑。"
+        },
+        {
+          "method": "PUT",
+          "path": "/projects/status/{id}",
+          "summary": "修改项目状态",
+          "auth": "Bearer Token",
+          "permission": "project:edit",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "项目 ID"}],
+          "query": [{"name": "status", "type": "int", "required": true, "description": "0 规划中 / 1 进行中 / 2 维护中 / 3 暂停 / 4 已完成 / 5 已取消"}],
+          "response": {"code": 1, "msg": "项目状态已更新为「维护中」", "data": null},
+          "notes": "维护中表示项目已经发布但未结束，可以继续新增项目任务。已归档项目必须先恢复才能改状态。"
+        },
+        {
+          "method": "PUT",
+          "path": "/projects/archive/{id}",
+          "summary": "归档项目",
+          "auth": "Bearer Token",
+          "permission": "project:archive",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "项目 ID"}],
+          "query": [{"name": "reason", "type": "string", "required": false, "description": "归档原因，最多 200 字"}],
+          "response": {"code": 1, "msg": "项目已归档", "data": null},
+          "notes": "归档后项目只读，不能编辑、改状态或新增项目任务，可以恢复。"
+        },
+        {
+          "method": "PUT",
+          "path": "/projects/restore/{id}",
+          "summary": "恢复已归档项目",
+          "auth": "Bearer Token",
+          "permission": "project:restore",
+          "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "项目 ID"}],
+          "response": {"code": 1, "msg": "项目已恢复", "data": null},
+          "notes": "恢复到归档前的业务状态。"
         },
         {
           "method": "DELETE",
@@ -538,7 +598,8 @@
           "auth": "Bearer Token",
           "permission": "project:delete",
           "params": [{"name": "id", "in": "path", "type": "long", "required": true, "description": "项目 ID"}],
-          "response": {"code": 1, "msg": "删除成功", "data": null}
+          "response": {"code": 1, "msg": "删除成功", "data": null},
+          "notes": "存在任务、周报或工时时禁止删除，只能归档。"
         }
       ]
     },
