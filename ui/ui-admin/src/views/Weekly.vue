@@ -307,7 +307,9 @@ onMounted(() => {
               <span v-if="projectStore.projectName(row.projectId)" class="weekly-project-tag">
                 {{ projectStore.projectName(row.projectId) }}
               </span>
-              <span v-if="(row.taskTitle || '').trim()" class="cell-ellipsis task-text">{{ row.taskTitle }}</span>
+              <el-tooltip v-if="(row.taskTitle || '').trim()" :content="row.taskTitle" placement="top-start" :show-after="200" popper-class="wk-cell-tooltip">
+                <span class="cell-ellipsis task-text">{{ row.taskTitle }}</span>
+              </el-tooltip>
               <span v-else class="wk-muted">未填写</span>
             </div>
           </template>
@@ -331,7 +333,7 @@ onMounted(() => {
         <el-table-column label="已解决问题及解决方式" min-width="210">
           <template #default="{ row }">
             <el-tooltip v-if="row.resolvedProblem" :content="row.resolvedProblem" placement="top-start" :show-after="200" popper-class="wk-cell-tooltip">
-              <span class="cell-ellipsis resolved-text">{{ row.resolvedProblem }}</span>
+              <span class="cell-ellipsis">{{ row.resolvedProblem }}</span>
             </el-tooltip>
             <span v-else class="wk-muted">未填写</span>
           </template>
@@ -397,7 +399,7 @@ onMounted(() => {
             </div>
             <div v-if="row.resolvedProblem" class="weekly-field">
               <span class="field-label">已解决问题及解决方式</span>
-              <p class="field-value is-resolved">{{ row.resolvedProblem }}</p>
+              <p class="field-value">{{ row.resolvedProblem }}</p>
             </div>
             <div v-if="row.problem" class="weekly-field">
               <span class="field-label">仍存在的问题</span>
@@ -613,10 +615,6 @@ onMounted(() => {
   color: #b54708;
 }
 
-.resolved-text {
-  color: #0b8b4f;
-}
-
 .weekly-task-cell {
   display: flex;
   flex-direction: row;
@@ -722,10 +720,6 @@ onMounted(() => {
 
 .field-value.is-problem {
   color: #b54708;
-}
-
-.field-value.is-resolved {
-  color: #0b8b4f;
 }
 
 .no-detail {

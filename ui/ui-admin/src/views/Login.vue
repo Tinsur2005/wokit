@@ -133,7 +133,8 @@ const submit = async () => {
 .login-aside {
   display: flex;
   flex-direction: column;
-  padding: 38px 40px 32px;
+  justify-content: center;
+  padding: 38px 40px;
   background: #f2fbf6;
 }
 
